@@ -56,6 +56,10 @@ function log(event: AttackEvent) {
 export function startHoneypot(
   port = Number(process.env.HONEYPOT_PORT ?? 2222),
 ) {
+  // Default to loopback. Set HONEYPOT_BIND=0.0.0.0 deliberately when deploying
+  // to a VPS you own — never expose this to a network you don't control.
+  const bind = process.env.HONEYPOT_BIND ?? '127.0.0.1';
+
   // ssh2 wants key material, not a filesystem path, unless hostHash is set.
   const hostKeys = [
     resolve(KEY_DIR, "host_rsa"),
@@ -173,9 +177,9 @@ export function startHoneypot(
     },
   );
 
-  server.listen(port, "0.0.0.0", () => {
+  server.listen(port, bind, () => {
     console.log(
-      `[honeypot] listening on 0.0.0.0:${port} (logs -> ${LOG_PATH})`,
+      `[honeypot] listening on ${bind}:${port} (logs -> ${LOG_PATH})`,
     );
   });
 

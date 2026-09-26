@@ -7,7 +7,13 @@
   "scripts": {
     "dev": "mastra dev",
     "build": "mastra build",
-    "start": "mastra start"
+    "start": "mastra start",
+    "honeypot": "tsx src/honeypot/ssh-server.ts",
+    "pipeline": "tsx scripts/run-pipeline.ts",
+    "probe": "tsx scripts/probe-honeypot.ts",
+    "keys": "mkdir -p honeypot/keys && ssh-keygen -t rsa -b 2048 -f honeypot/keys/host_rsa -N \"\" -q && ssh-keygen -t ed25519 -f honeypot/keys/host_ed25519 -N \"\" -q",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "keywords": [],
   "author": "",
@@ -30,6 +36,7 @@
     "@types/node": "latest",
     "@types/ssh2": "^1.15.6",
     "mastra": "1.31.3",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^5.0.2"
   }

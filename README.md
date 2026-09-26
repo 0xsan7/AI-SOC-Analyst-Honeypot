@@ -1,58 +1,168 @@
-# soc-analyst
+<div align="center">
 
-Welcome to your new [Mastra](https://mastra.ai) project! We're excited to see what you build.
+# 🪤 AI SOC Analyst
 
-This starter provides you with a general-purpose Mastra agent that can research current information, manage multi-step tasks, work with local files, run approved shell commands, and create recurring schedules.
+**An agentic honeypot triage pipeline.** Attackers hit a low-interaction SSH honeypot; a Mastra workflow grades every session, enriches it with threat intel, and writes analyst-readable reports.
 
-## Features
+[![Gemini](https://img.shields.io/badge/LLM-Google%20Gemini-4285F4?style=flat-square&logo=googlegemini&logoColor=white)](https://ai.google.dev/gemini-api)
+[![Mastra](https://img.shields.io/badge/framework-Mastra-8A2BE2?style=flat-square)](https://mastra.ai)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square)](LICENSE)
 
-- A local `workspace/` for files and command execution (created under `src/mastra/public/workspace/` when running `mastra dev`)
-- Approval gates for file changes, deletions, and shell commands
-- Conversation memory, generated thread titles, and task tracking
-- Built-in web search and direct web page fetching
-- Recurring schedules that persist across restarts
-- Local libSQL storage and DuckDB observability, with optional Turso storage
-- A bundled Mastra skill that helps coding agents use current Mastra APIs
+</div>
 
-## Get started
+---
 
-Set your `ANTHROPIC_API_KEY` in `.env` or in your environment, then run:
+## What it does
 
-```shell
-npm run dev
+A public SSH port gets scanned constantly. Most of it is noise; some of it is a real operator working their way toward a foothold. Telling those apart by hand is the boring part.
+
+This project automates the boring part:
+
+- **Honeypot** — a low-interaction SSH server that accepts any credential and answers from a static table. It records what was tried, never runs it.
+- **Triage** — a Mastra workflow classifies each session (`noise` / `recon` / `credential_stuffing` / `active_exploit_attempt`) with an LLM-graded severity 1–5.
+- **Enrichment** — geolocation and ASN via `ip-api.com`, optional AbuseIPDB reputation. Every lookup degrades gracefully: a missing key or a dead network produces a warning, never a crash.
+- **Reports** — markdown incident reports generated from correlated campaigns.
+
+## Architecture
+
+```
+   attacker
+      │  ssh -p 2222
+      ▼
+┌──────────────────────┐
+│  SSH honeypot :2222  │   accepts any credential
+│  (ssh2, no exec)     │   static canned replies only
+└──────────┬───────────┘
+           │  data/events.jsonl
+           ▼
+┌──────────────────────┐
+│  Normalizer          │   JSONL → validated AttackEvent
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────────────────────────┐
+│  Mastra triage workflow                 │
+│                                          │
+│  classify ──► Gemini grades severity     │
+│      │                                   │
+│      ▼                                   │
+│  enrich   ──► ip-api.com / AbuseIPDB     │
+│             (degrades gracefully)        │
+└──────────┬───────────────────────────────┘
+           │  data/enriched.jsonl
+           ▼
+┌──────────────────────┐
+│  Correlation agent   │   groups events into campaigns
+└──────────┬───────────┘
+           ▼
+      markdown reports
 ```
 
-Open [http://localhost:4111](http://localhost:4111) in your browser to access [Mastra Studio](https://mastra.ai/docs/studio/overview).
+## Quick start
 
-Select **Agent** in Mastra Studio and try one of these prompts:
+Requires **Node 22.13+**.
 
-- `Get the weather forecast for Austin this weekend.`
-- `Create a landing page for a Japanese sakura festival.`
-- `Check the SPCX stock price now, then check it every minute.`
+```bash
+git clone https://github.com/0xsan7/Honeypot.git
+cd Honeypot
+npm install
+cp .env.example .env      # add your GOOGLE_GENERATIVE_AI_API_KEY
+npm run keys              # generate honeypot host keys
+```
 
-The agent asks for approval before it changes files or runs commands. When it creates a schedule, it returns an ID that you can use to pause the schedule.
+Get a free Gemini key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (starts with `AIza`).
 
-## Workspace safety
+Then, in two terminals:
 
-The local filesystem tools stay inside the `workspace/` directory, which resolves relative to the server's working directory (`src/mastra/public/workspace/` during `mastra dev`). Shell commands start in that directory, but `LocalSandbox` does not provide operating-system isolation by default. Review command approvals carefully, and do not expose this template through an unauthenticated public server.
+```bash
+# 1 — start the honeypot
+npm run honeypot
 
-## Storage
+# 2 — attack it, then triage what it caught
+ssh -p 2222 root@127.0.0.1    # any password works
+whoami
+cat /etc/shadow
 
-The default `file:./mastra.db` database stores agent memory, tasks, and schedules locally. To use Turso, set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in `.env`.
+npm run pipeline
+```
 
-Recurring schedules continue to use model tokens until you pause them. Ask the agent to pause a schedule with the ID returned by `start_schedule`.
+Output:
 
-## Making it yours
+```
+[5] active_exploit_attempt   127.0.0.1 user=root pass=admin123 cmds=4
+[4] active_exploit_attempt   127.0.0.1 user=admin pass=password cmds=2
+[3] credential_stuffing      127.0.0.1 user=test pass=test cmds=0
+      warnings: skipped geo lookup for private IP; AbuseIPDB skipped: no key
+```
 
-- Edit `src/mastra/agents/agent.ts` to change the model, instructions, memory, workspace, or approval policy.
-- Edit `src/mastra/tools/` to customize scheduling.
-- Edit `src/mastra/index.ts` to change storage and observability.
-- Add files or reusable skills under `src/mastra/public/workspace/` for the agent to use during `mastra dev`.
+## Commands
 
-## Learn more
+| Command | What it does |
+| --- | --- |
+| `npm run honeypot` | Start the SSH honeypot on `:2222` |
+| `npm run pipeline` | Triage every captured event through the LLM |
+| `npm run probe` | Drive synthetic SSH sessions at the honeypot |
+| `npm run dev` | Mastra Studio on [localhost:4111](http://localhost:4111) |
+| `npm test` | Run the test suite (mocked LLM — no API calls) |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run keys` | Regenerate honeypot host keys |
 
-To learn more about Mastra, visit our [documentation](https://mastra.ai/docs/). If you're new to AI agents, check out our [course](https://mastra.ai/learn) and [YouTube videos](https://youtube.com/@mastra-ai). You can also join our [Discord](https://discord.gg/mastra-ai) community to get help and share your projects.
+## Configuration
 
-## Deploy to the Mastra platform
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | yes | Gemini key for classification |
+| `ABUSEIPDB_API_KEY` | no | Reputation scores; skipped when absent |
+| `HONEYPOT_PORT` | no | Defaults to `2222` |
+| `HONEYPOT_BIND` | no | Defaults to `127.0.0.1` (loopback) |
+| `HONEYPOT_LOG` | no | Defaults to `data/events.jsonl` |
 
-The [Mastra platform](https://projects.mastra.ai) provides two products for deploying and managing AI applications built with the Mastra framework. Learn more in the [Mastra platform documentation](https://mastra.ai/docs/mastra-platform/overview).
+## Security model
+
+This is a **defensive** tool. It observes traffic aimed at infrastructure the operator controls.
+
+- **No command execution, ever.** There is no `child_process`, no shell, no `spawn` in the honeypot. Attacker commands are recorded as strings and answered from a static lookup table. This is enforced by construction — there is no code path from attacker input to a real process, and it does not depend on any LLM or runtime judgement.
+- **Loopback by default.** The honeypot binds `127.0.0.1`. Set `HONEYPOT_BIND=0.0.0.0` only on infrastructure you own.
+- **No scanning.** Nothing here probes or touches third-party systems.
+- **Free-tier only.** Geolocation uses `ip-api.com`'s free tier with retry/backoff on 429s.
+- **Credentials in examples are synthetic** (`admin123`, `password`), generated by the test probe — never scraped.
+
+## Rate limits
+
+Gemini's free tier allows roughly **20 classification requests per day** on `gemini-3.5-flash`. When you hit it, the pipeline logs the failure for that event and continues with the rest — nothing crashes, but that event goes unenriched until the quota resets.
+
+If you need more throughput, set a billing-enabled key or point `CLASSIFIER_MODEL` at a different model in `src/mastra/triage.ts`.
+
+## Testing
+
+Tests use mocked LLM responses and stubbed network calls — the suite makes no live API calls and costs nothing:
+
+```bash
+npm test
+```
+
+## Project layout
+
+```
+src/
+  honeypot/ssh-server.ts   low-interaction SSH honeypot
+  mastra/
+    schemas.ts             zod schemas: AttackEvent / EnrichedEvent / Campaign
+    normalizer.ts          JSONL → validated events
+    triage.ts              classify → enrich workflow
+    enrich.ts              geo / ASN / reputation, degrades gracefully
+scripts/
+  run-pipeline.ts          end-to-end triage
+  probe-honeypot.ts        synthetic attacker sessions
+tests/                     mocked-LLM tests
+```
+
+## Roadmap
+
+Milestone 1 (honeypot + triage) is done. Next: correlation agent with persistent memory, report generation, MCP server exposure, and the live dashboard.
+
+See [PRD.md](PRD.md) for the full specification.
+
+## License
+
+Apache-2.0
