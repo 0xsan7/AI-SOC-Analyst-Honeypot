@@ -21,7 +21,10 @@ This project automates the boring part:
 - **Honeypot** — a low-interaction SSH server that accepts any credential and answers from a static table. It records what was tried, never runs it.
 - **Triage** — a Mastra workflow classifies each session (`noise` / `recon` / `credential_stuffing` / `active_exploit_attempt`) with an LLM-graded severity 1–5.
 - **Enrichment** — geolocation and ASN via `ip-api.com`, optional AbuseIPDB reputation. Every lookup degrades gracefully: a missing key or a dead network produces a warning, never a crash.
-- **Reports** — markdown incident reports generated from correlated campaigns.
+- **Correlation** — events from the same source IP inside a 30-minute window collapse into one campaign, persisted in LibSQL so they survive restarts.
+- **Reports** — markdown incident reports auto-generated the first time a campaign crosses severity 4 or 5 events, and refreshed as it grows.
+- **MCP server** — exposes `get_recent_campaigns`, `get_campaign_detail`, and `ask_soc_agent` to any MCP client.
+- **Dashboard** — live view of event volume, top sources, and open campaigns.
 
 ## Architecture
 
@@ -52,10 +55,17 @@ This project automates the boring part:
            │  data/enriched.jsonl
            ▼
 ┌──────────────────────┐
-│  Correlation agent   │   groups events into campaigns
+│  Correlation agent   │   same IP within 30 min -> one campaign
+│  (LibSQL, persists)  │   report at severity>=4 or >=5 events
 └──────────┬───────────┘
            ▼
-      markdown reports
+      reports/*.md
+           │
+           ├──► dashboard (npm run dashboard)
+           └──► MCP server (npm run mcp)
+                 get_recent_campaigns
+                 get_campaign_detail
+                 ask_soc_agent
 ```
 
 ## Quick start
@@ -95,17 +105,67 @@ Output:
       warnings: skipped geo lookup for private IP; AbuseIPDB skipped: no key
 ```
 
+**Out of Gemini quota?** Seed realistic enriched events and exercise the whole
+second half of the pipeline without spending a single request:
+
+```bash
+npm run seed        # 9 synthetic enriched events
+npm run correlate   # group into campaigns, generate reports
+```
+
+```
+  198.51.100.23 sev5 active_exploit_attempt   -> campaign 9993a6d3 (6 events, max sev 5)
+      REPORT: reports/campaign-9993a6d3-....md
+```
+
+Then view it:
+
+```bash
+npm run dashboard   # http://127.0.0.1:4173
+npm run mcp         # MCP server on stdio
+```
+
 ## Commands
 
 | Command | What it does |
 | --- | --- |
 | `npm run honeypot` | Start the SSH honeypot on `:2222` |
 | `npm run pipeline` | Triage every captured event through the LLM |
+| `npm run correlate` | Group enriched events into campaigns, write reports |
+| `npm run seed` | Seed synthetic enriched events (no LLM calls) |
+| `npm run dashboard` | Live dashboard on [127.0.0.1:4173](http://127.0.0.1:4173) |
+| `npm run mcp` | MCP server on stdio (3 tools) |
 | `npm run probe` | Drive synthetic SSH sessions at the honeypot |
 | `npm run dev` | Mastra Studio on [localhost:4111](http://localhost:4111) |
 | `npm test` | Run the test suite (mocked LLM — no API calls) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run keys` | Regenerate honeypot host keys |
+
+## MCP server
+
+```bash
+npm run mcp
+```
+
+| Tool | Purpose |
+| --- | --- |
+| `get_recent_campaigns` | List recent campaigns with severity and event counts |
+| `get_campaign_detail` | One campaign plus every enriched event in it |
+| `ask_soc_agent` | Free-text questions, answered from stored data only |
+
+Add it to any MCP client (e.g. `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "soc-analyst": {
+      "command": "npm",
+      "args": ["run", "mcp"],
+      "cwd": "/absolute/path/to/soc-analyst"
+    }
+  }
+}
+```
 
 ## Configuration
 
@@ -116,6 +176,10 @@ Output:
 | `HONEYPOT_PORT` | no | Defaults to `2222` |
 | `HONEYPOT_BIND` | no | Defaults to `127.0.0.1` (loopback) |
 | `HONEYPOT_LOG` | no | Defaults to `data/events.jsonl` |
+| `CAMPAIGN_WINDOW_MS` | no | Correlation window, defaults to 30 minutes |
+| `REPORT_DIR` | no | Defaults to `reports/` |
+| `DASHBOARD_PORT` | no | Defaults to `4173` |
+| `TURSO_DATABASE_URL` | no | Remote LibSQL; defaults to `file:./soc-analyst.db` |
 
 ## Security model
 
@@ -147,19 +211,32 @@ npm test
 src/
   honeypot/ssh-server.ts   low-interaction SSH honeypot
   mastra/
+    index.ts               Mastra registration (agents, tools, workflows)
     schemas.ts             zod schemas: AttackEvent / EnrichedEvent / Campaign
     normalizer.ts          JSONL → validated events
     triage.ts              classify → enrich workflow
     enrich.ts              geo / ASN / reputation, degrades gracefully
+    store.ts               LibSQL campaign store (persists across restarts)
+    report.ts              markdown incident report generator
+    mcp-server.ts          MCP exposure (3 tools)
+    agents/soc-agent.ts    memory-backed analyst agent
+    public/index.html      dashboard
 scripts/
-  run-pipeline.ts          end-to-end triage
+  run-pipeline.ts          honeypot events → enriched events
+  correlate.ts             enriched events → campaigns + reports
+  seed-enriched.ts         synthetic events for testing without an LLM
   probe-honeypot.ts        synthetic attacker sessions
-tests/                     mocked-LLM tests
+  dashboard.ts             serves the dashboard
+  test-mcp.ts              verifies MCP tool names
+tests/                     14 tests, all mocked
+reports/                   generated incident reports
 ```
 
 ## Roadmap
 
-Milestone 1 (honeypot + triage) is done. Next: correlation agent with persistent memory, report generation, MCP server exposure, and the live dashboard.
+Milestones 1 and 2 are done: honeypot, triage, correlation, reports, MCP
+exposure, and the dashboard. Not yet built: a live Mastra Studio traces
+integration test, and campaign auto-closing after a quiet period.
 
 See [PRD.md](PRD.md) for the full specification.
 

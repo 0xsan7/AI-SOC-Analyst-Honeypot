@@ -10,13 +10,25 @@ import {
 } from "@mastra/observability";
 import { agent } from "./agents/agent";
 import { startScheduleTool, stopScheduleTool } from "./tools/schedule-tools";
+import {
+  socAgent,
+  getCampaignDetailTool,
+  listCampaignsTool,
+} from "./agents/soc-agent";
+import { triageWorkflow } from "./triage";
 
 export const mastra = new Mastra({
   bundler: {
     externals: ["@duckdb/node-bindings"],
   },
-  agents: { agent },
-  tools: { startScheduleTool, stopScheduleTool },
+  agents: { agent, socAgent },
+  tools: {
+    startScheduleTool,
+    stopScheduleTool,
+    listCampaignsTool,
+    getCampaignDetailTool,
+  },
+  workflows: { triageWorkflow },
   storage: new MastraCompositeStore({
     id: "composite-storage",
     default: new LibSQLStore({

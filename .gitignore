@@ -17,3 +17,12 @@ src/mastra/public/
 # Honeypot runtime output and private host keys — never commit these.
 data/
 honeypot/keys/
+
+# Generated reports (examples/ holds a committed sample instead).
+reports/
+
+# Dashboard serves this copy of the data file.
+src/mastra/public/enriched.jsonl
+
+# macOS
+.DS_Store
