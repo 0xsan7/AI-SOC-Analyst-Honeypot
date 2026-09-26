@@ -13,3 +13,7 @@ src/mastra/public/
 *.duckdb
 *.duckdb.wal
 *.db
+
+# Honeypot runtime output and private host keys — never commit these.
+data/
+honeypot/keys/
