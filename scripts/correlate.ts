@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import {
   closeIdleCampaigns,
   correlate,
+  getCampaign,
   initStore,
   listCampaigns,
 } from "../src/mastra/store";
@@ -22,6 +23,14 @@ await initStore();
 const closed = await closeIdleCampaigns();
 if (closed.length > 0) {
   console.log(`Closed ${closed.length} idle campaign(s).`);
+  // Refresh their reports so the file on disk stops saying "open". Without
+  // this the markdown is the last place still showing an incident as active:
+  // needsReport() is false for an already-generated report, and closing
+  // happens before the loop that would otherwise force a refresh.
+  for (const id of closed) {
+    const c = await getCampaign(id);
+    if (c) await generateReportIfNeeded(c, true);
+  }
 }
 
 let events: ReturnType<typeof EnrichedEventSchema.parse>[] = [];

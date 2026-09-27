@@ -67,7 +67,7 @@ export function renderReport(c: Campaign, events: EnrichedEvent[]): string {
 
 ## Summary
 
-${events.length} SSH session${events.length === 1 ? "" : "s"} from ${c.sourceIps.length} source address${c.sourceIps.length === 1 ? "" : "es"} were recorded against the honeypot and classified as **${CLASS_LABEL[events[0]?.classification ?? "noise"] ?? events[0]?.classification}** at up to severity ${c.maxSeverity}/5.
+${events.length} SSH session${events.length === 1 ? " was" : "s were"} recorded against the honeypot from ${c.sourceIps.length} source address${c.sourceIps.length === 1 ? "" : "es"} and classified as **${CLASS_LABEL[events[0]?.classification ?? "noise"] ?? events[0]?.classification}** at up to severity ${c.maxSeverity}/5.
 
 ${
   c.maxSeverity >= 4

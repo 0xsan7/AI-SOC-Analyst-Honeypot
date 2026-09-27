@@ -108,6 +108,48 @@ smaller but the same.
 Schema now requires a non-empty trimmed id, so malformed input is a validation
 error and a genuine miss stays a clean `{"found": false}`.
 
+## D8 — `npm run setup` instead of a postinstall web build
+
+A fresh clone served **404 "landing page not built"** at /: `web/` has its own
+dependencies and the root `npm install` does not build it. The first thing
+anyone saw after cloning was a broken-looking server.
+
+Rejected postinstall: a nested `npm install` plus a Vite build on every root
+install makes the common case slow and fails outright offline. An explicit
+`npm run setup` (15s, idempotent) is honest about the cost and works offline
+once cached. / also now serves a styled page explaining the build step instead
+of a bare 404.
+
+Cold-clone verified end to end: clone -> install -> setup -> dashboard, 17s
+total, all routes 200, traversal still 404.
+
+## D9 — Closing a campaign now refreshes its report
+
+Found while generating the closed-campaign example: after auto-close every
+report still said `Status: open`. `needsReport()` is false for an
+already-generated report, and closing happens before the correlate loop that
+would force a refresh, so the markdown was the last place still showing a dead
+incident as live.
+
+correlate now force-refreshes reports for exactly the campaigns it closed. The
+auto-close test asserts a report contains `**Status:** closed` after the fact.
+
+## D10 — Report summary grammar for a single event
+
+"1 SSH session ... **were** recorded". The verb agreed with "session" but the
+clause was plural. Now `1 SSH session was recorded` / `N SSH sessions were
+recorded`. Found only because the example report I generated happened to be a
+one-event campaign -- a shape the seed data does not normally produce.
+
+Added `tests/report.test.ts` and confirmed it is not a vacuous pass: reverting
+the wording fails 2 of its 6 assertions.
+
+## D11 — Correlation is idempotent (checked, not changed)
+
+Worried that re-running `npm run correlate` would duplicate every campaign.
+It does not: three consecutive runs on the same input hold at 15 campaigns.
+No change needed, recorded so the question is not re-opened.
+
 MCP adversarial check (`scripts/test-mcp-robustness.ts`, 11 assertions) found
 nothing else: SQL-ish ids are parameterized and return `found: false` rather
 than executing; wrong-typed, missing, and absurd `limit` values all produce

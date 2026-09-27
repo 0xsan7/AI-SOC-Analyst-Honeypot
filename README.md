@@ -77,10 +77,15 @@ git clone https://github.com/0xsan7/Honeypot.git
 cd Honeypot
 npm install
 cp .env.example .env      # add your GOOGLE_GENERATIVE_AI_API_KEY
-npm run keys              # generate honeypot host keys
+npm run setup             # host keys + landing page build + demo data
 ```
 
-Get a free Gemini key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (starts with `AIza`).
+`npm run setup` takes about **15 seconds** on a warm npm cache and is
+idempotent — safe to re-run. It generates the honeypot host keys, installs and
+builds the `web/` frontend, and seeds demo campaigns so there is something to
+look at before you have an API key.
+
+Get a free Gemini key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (starts with `AIza`). The key is only needed for live triage — everything else, including the demo, works without it.
 
 Then, in two terminals:
 
@@ -158,6 +163,10 @@ rather than failing silently.
 | `npm run test:all` | Unit tests + typecheck + MCP wire test + pipeline failure test |
 | `npm run test:mcp` | Connect a real MCP client over stdio and call the tools |
 | `npm run test:pipeline` | Assert the pipeline exits non-zero and explains why when it fails |
+| `npm run test:mcp-robustness` | Throw 11 hostile inputs at the MCP server; it must not crash |
+| `npm run test:autoclose` | Prove campaign auto-close persists across separate processes |
+| `npm run verify:honeypot` | Prove the no-execution invariant against a running honeypot |
+| `npm run setup` | Host keys + frontend build + demo data (one command) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run keys` | Regenerate honeypot host keys |
 
@@ -253,19 +262,25 @@ If you need more throughput, set a billing-enabled key or point `CLASSIFIER_MODE
 npm run test:all
 ```
 
-Four layers:
+Per-criterion manual verification — what a real pass looks like for each, and
+the commands to run it — is in **[TESTING.md](TESTING.md)**.
+
+Five layers:
 
 | Suite | What it proves |
 | --- | --- |
-| `npm test` | 14 unit tests, LLM mocked — no API calls, costs nothing |
+| `npm test` | 31 unit tests, LLM mocked — no API calls, costs nothing |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run test:mcp` | A real MCP client completes a handshake, lists all 3 tools, and calls 2 against a seeded store |
+| `npm run test:mcp-robustness` | 11 malformed calls produce clean errors, never a crash |
 | `npm run test:pipeline` | With the API key removed, the pipeline exits non-zero, writes nothing, and prints a fix |
+| `npm run test:autoclose` | An idle campaign becomes `closed`, read back by a separate process |
 
-The last two exist because both bugs they cover were invisible to the unit tests.
-The original in-process MCP test passed while **no MCP client could connect**,
-and the pipeline exited `0` while writing **zero enriched events**. Both are the
-kind of failure that only shows up over a real boundary.
+The three boundary tests exist because those bugs were invisible to the unit
+tests. The original in-process MCP test passed while **no MCP client could
+connect**, the pipeline exited `0` while writing **zero enriched events**, and
+the honeypot verifier exited `0` with **nothing listening**. All three are
+failures that only show up across a real boundary.
 
 ## Project layout
 

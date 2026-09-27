@@ -11,7 +11,7 @@
  * Usage: npx tsx scripts/test-auto-close.ts
  */
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +28,8 @@ const work = mkdtempSync(join(tmpdir(), "autoclose-"));
 mkdirSync(join(work, "data"), { recursive: true });
 const dbPath = join(work, "test.db");
 const dbUrl = `file:${dbPath}`;
+// Reports are written relative to cwd, and correlate runs with cwd=work.
+const reportsDir = join(work, "reports");
 
 const HOUR = 60 * 60 * 1000;
 const iso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
@@ -126,6 +128,21 @@ const openCount = campaigns.filter((c) => c.status === "open").length;
 check("the idle campaign persisted as closed", closedCount === 1, `${closedCount} closed`);
 check("the follow-on campaign is open", openCount === 1, `${openCount} open`);
 check("both campaigns persisted", campaigns.length === 2, `${campaigns.length} total`);
+
+// The markdown on disk is what a human reads. If it still says "open" after
+// the campaign closed, the report is the last place showing a dead incident
+// as live — needsReport() is false for an already-generated report, so this
+// only works because correlate forces a refresh on the campaigns it closes.
+const reportFiles = existsSync(reportsDir)
+  ? readdirSync(reportsDir).filter((f) => f.endsWith(".md"))
+  : [];
+check("reports were written", reportFiles.length > 0, `${reportFiles.length} file(s)`);
+const statuses = reportFiles.map((f) => readFileSync(join(reportsDir, f), "utf8"));
+check(
+  "no report still claims an open campaign after closing",
+  statuses.some((s) => s.includes("**Status:** closed")),
+  `${statuses.filter((s) => s.includes("**Status:** closed")).length} closed of ${statuses.length}`,
+);
 
 rmSync(work, { recursive: true, force: true });
 console.log(failures === 0 ? "\nAUTO-CLOSE TEST: PASS" : `\nAUTO-CLOSE TEST: ${failures} FAILURE(S)`);
