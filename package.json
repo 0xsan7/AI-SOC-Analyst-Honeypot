@@ -20,8 +20,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:mcp": "tsx scripts/test-mcp-wire.ts",
     "test:pipeline": "tsx scripts/test-pipeline-failure.ts",
-    "test:all": "tsc -p tsconfig.json --noEmit && vitest run && tsx scripts/test-mcp-wire.ts && tsx scripts/test-pipeline-failure.ts && tsx scripts/test-auto-close.ts",
-    "test:autoclose": "tsx scripts/test-auto-close.ts"
+    "test:all": "tsc -p tsconfig.json --noEmit && vitest run && tsx scripts/test-mcp-wire.ts && tsx scripts/test-mcp-robustness.ts && tsx scripts/test-pipeline-failure.ts && tsx scripts/test-auto-close.ts",
+    "test:autoclose": "tsx scripts/test-auto-close.ts",
+    "test:mcp-robustness": "tsx scripts/test-mcp-robustness.ts",
+    "verify:honeypot": "tsx scripts/verify-honeypot.ts"
   },
   "keywords": [],
   "author": "",

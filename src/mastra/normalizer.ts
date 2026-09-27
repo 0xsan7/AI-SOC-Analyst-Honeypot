@@ -36,22 +36,43 @@ export function tailEvents(
   path: string,
   onEvent: (e: AttackEvent) => void,
 ): () => void {
+  const ANCHOR_BYTES = 64;
   let offset = 0;
   let partial = "";
+  // The last few characters we consumed. A JSONL log is only ever appended to,
+  // so those bytes must still be sitting at `offset` on the next poll. If they
+  // are not, the file was rewritten or rotated in place -- and neither the size
+  // nor the inode can see that case: a same-path rewrite keeps the inode, and a
+  // replacement file is often LARGER than the old one, so `size < offset` is
+  // false and a naive tail resumes mid-line and silently drops events.
+  let anchor = "";
 
   const pump = async () => {
     if (!existsSync(path)) return;
-    const stat = await import("node:fs").then((fs) => fs.statSync(path));
-    if (stat.size < offset) {
-      // Truncated/rotated — restart from the top.
+    const text = await readFile(path, "utf8");
+    // `offset` counts characters, not bytes: stat.size is bytes and diverges
+    // from a string index as soon as a captured command contains non-ASCII
+    // (an attacker password is exactly the kind of thing that happens), which
+    // would slice mid-codepoint and corrupt every line after it.
+    if (text.length < offset) {
       offset = 0;
       partial = "";
+      anchor = "";
     }
-    if (stat.size === offset) return;
-    const chunk = await readFile(path, "utf8").then((t) => t.slice(offset));
-    offset = stat.size;
+    if (anchor && offset > 0) {
+      const window = text.slice(Math.max(0, offset - anchor.length), offset);
+      if (window !== anchor) {
+        offset = 0;
+        partial = "";
+        anchor = "";
+      }
+    }
+    if (text.length === offset) return;
+    const chunk = text.slice(offset);
+    offset = text.length;
     const lines = (partial + chunk).split("\n");
     partial = lines.pop() ?? "";
+    anchor = text.slice(Math.max(0, offset - ANCHOR_BYTES));
     for (const line of lines) {
       if (!line.trim()) continue;
       try {

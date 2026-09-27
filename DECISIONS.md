@@ -54,3 +54,61 @@ were diagnostics for the MCP protocol bug and referenced nowhere.
 **This is not equivalent to running the real review.** A manual read is my own
 judgement, not the plugin's guarantee. Recorded here so the absence of a
 ponytail pass is not mistaken for a pass.
+
+## D4 — verify-honeypot.ts now asserts and exits non-zero
+
+It previously ended in `process.exit(0)` unconditionally. With no honeypot
+running it printed `ECONNREFUSED`, crashed, and the shell still saw exit 0 --
+so a completely dead honeypot read as a passing verification. It is the same
+bug class as the pipeline's silent success, one layer over.
+
+It now asserts the security invariant directly: payload marker files are never
+created, sessions are recorded, and the `wget` payload is captured verbatim.
+Exits 1 on any failure. This is the script that backs the PRD's central claim,
+so it should not be able to lie about that claim.
+
+Two assertions failed on first run and both were the script's fault, not the
+honeypot's: it checked the log before the honeypot finished flushing the last
+session (now polls for up to 3s), and the event count was asserted before the
+wget session had closed.
+
+## D5 — tailEvents detected rotation by content, not size or inode
+
+Wrote tests for log rotation and found the existing guard (`size < offset`)
+misses the common case. A same-path rewrite keeps the inode, and a
+logrotate-style replacement is often *larger* than the old file, so the size
+check is false and the tail resumes mid-line and silently drops events. Tried
+tracking the inode; that does not work either, because `writeFileSync` to an
+existing path reuses the inode -- and real rotation via rename gives a new one,
+so neither check covers both.
+
+Now compares the last 64 characters against the current file contents. A
+JSONL log is append-only, so those characters must still be there; if they are
+not, the file was replaced and the tail restarts from zero. Catches every
+rotation shape rather than the one the size check happened to cover.
+
+## D6 — tail offset was counting bytes while slicing a string
+
+`stat.size` is bytes; `String.prototype.slice` takes characters. They agree only
+while the log is pure ASCII. One captured command containing a multi-byte
+character (an attacker typing a non-ASCII password is the obvious case) shifts
+the two apart, and every line after it is sliced mid-codepoint and lost.
+
+Now indexes with `text.length` throughout, so offset and slice use the same
+unit. Found while writing the rotation test; the unicode case is now covered by
+a test that fails against the old code.
+
+## D7 — get_campaign_detail rejects empty ids instead of reporting "not found"
+
+The input schema accepted `campaignId: ""`, which fell through to a lookup and
+returned `{"found": false}`. A client could not distinguish "no such campaign"
+from "you sent me garbage" -- the same silent-failure shape as the pipeline bug,
+smaller but the same.
+
+Schema now requires a non-empty trimmed id, so malformed input is a validation
+error and a genuine miss stays a clean `{"found": false}`.
+
+MCP adversarial check (`scripts/test-mcp-robustness.ts`, 11 assertions) found
+nothing else: SQL-ish ids are parameterized and return `found: false` rather
+than executing; wrong-typed, missing, and absurd `limit` values all produce
+clean tool errors; the server survives every case and still lists all 3 tools.

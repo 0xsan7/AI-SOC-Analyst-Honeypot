@@ -50,7 +50,14 @@ export const listCampaignsTool = createTool({
 export const getCampaignDetailTool = createTool({
   id: "get_campaign_detail",
   description: "Get one campaign plus every enriched event that belongs to it.",
-  inputSchema: z.object({ campaignId: z.string() }),
+  inputSchema: z.object({
+    // An empty or whitespace id is a malformed request, not a missing
+    // campaign. Without min(1) it falls through to a `{"found": false}`
+    // lookup and a client cannot tell "no such campaign" from "you sent
+    // garbage" — which is exactly the silent-failure shape this tool should
+    // not have.
+    campaignId: z.string().min(1, "campaignId must not be empty").trim(),
+  }),
   outputSchema: z.object({
     found: z.boolean(),
     campaign: z
