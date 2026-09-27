@@ -155,10 +155,33 @@ rather than failing silently.
 | `npm run probe` | Drive synthetic SSH sessions at the honeypot |
 | `npm run dev` | Mastra Studio on [localhost:4111](http://localhost:4111) |
 | `npm test` | Run the test suite (mocked LLM — no API calls) |
+| `npm run test:all` | Unit tests + typecheck + MCP wire test + pipeline failure test |
+| `npm run test:mcp` | Connect a real MCP client over stdio and call the tools |
+| `npm run test:pipeline` | Assert the pipeline exits non-zero and explains why when it fails |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run keys` | Regenerate honeypot host keys |
 
 ## MCP server
+
+Exposes three tools over stdio: `get_recent_campaigns`, `get_campaign_detail`,
+and `ask_soc_agent`.
+
+```bash
+npm run mcp
+```
+
+**Version constraint.** `@mastra/mcp` is pinned to **1.18.0**, not 2.x. The 2.x
+line depends on `@modelcontextprotocol/server@2.0.0`, which speaks only the
+`2026-07-28` protocol and requires a per-request envelope claim. No published MCP
+client supports that version yet — the newest client SDK tops out at `2025-11-25` —
+so a 2.x server cannot be connected to by any real client. 1.18.0 pulls in
+`@modelcontextprotocol/server-legacy`, which negotiates the 2025-era protocols that
+Claude Desktop, Cursor, and VS Code actually speak.
+
+`npm run test:mcp` proves this over the wire: it spawns the server as a child
+process, connects with the official client SDK, lists the tools, and calls two of
+them against a seeded store. An earlier in-process test passed while no client
+could connect, so the wire test is the one that counts.
 
 ```bash
 npm run mcp
@@ -210,17 +233,38 @@ This is a **defensive** tool. It observes traffic aimed at infrastructure the op
 
 ## Rate limits
 
-Gemini's free tier allows roughly **20 classification requests per day** on `gemini-3.5-flash`. When you hit it, the pipeline logs the failure for that event and continues with the rest — nothing crashes, but that event goes unenriched until the quota resets.
+Gemini's free tier allows roughly **20 classification requests per day** on `gemini-3.5-flash`. When you hit it, the pipeline logs the failure for that event and continues with the rest — nothing crashes, and events that did succeed are still written.
+
+The command then **exits non-zero** so a script or CI notices, and prints the fix:
+
+```
+Enriched 0/20 event(s) -> data/enriched.jsonl
+PIPELINE FAILED: no events were enriched.
+  Gemini quota exhausted. The free tier allows ~20 requests/day — wait for the
+  reset, or run `npm run seed` to demo without an LLM.
+```
 
 If you need more throughput, set a billing-enabled key or point `CLASSIFIER_MODEL` at a different model in `src/mastra/triage.ts`.
 
 ## Testing
 
-Tests use mocked LLM responses and stubbed network calls — the suite makes no live API calls and costs nothing:
-
 ```bash
-npm test
+npm run test:all
 ```
+
+Four layers:
+
+| Suite | What it proves |
+| --- | --- |
+| `npm test` | 14 unit tests, LLM mocked — no API calls, costs nothing |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run test:mcp` | A real MCP client completes a handshake, lists all 3 tools, and calls 2 against a seeded store |
+| `npm run test:pipeline` | With the API key removed, the pipeline exits non-zero, writes nothing, and prints a fix |
+
+The last two exist because both bugs they cover were invisible to the unit tests.
+The original in-process MCP test passed while **no MCP client could connect**,
+and the pipeline exited `0` while writing **zero enriched events**. Both are the
+kind of failure that only shows up over a real boundary.
 
 ## Project layout
 

@@ -17,7 +17,10 @@
     "probe": "tsx scripts/probe-honeypot.ts",
     "keys": "mkdir -p honeypot/keys && ssh-keygen -t rsa -b 2048 -f honeypot/keys/host_rsa -N \"\" -q && ssh-keygen -t ed25519 -f honeypot/keys/host_ed25519 -N \"\" -q",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:mcp": "tsx scripts/test-mcp-wire.ts",
+    "test:pipeline": "tsx scripts/test-pipeline-failure.ts",
+    "test:all": "npm run test && npm run typecheck && npm run test:mcp && npm run test:pipeline"
   },
   "keywords": [],
   "author": "",
@@ -31,13 +34,14 @@
     "@mastra/core": "1.71.0",
     "@mastra/duckdb": "1.11.1",
     "@mastra/libsql": "1.23.3",
-    "@mastra/mcp": "^2.1.0",
+    "@mastra/mcp": "^1.18.0",
     "@mastra/memory": "1.32.1",
     "@mastra/observability": "1.18.1",
     "ssh2": "^1.17.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.1.0",
     "@types/node": "latest",
     "@types/ssh2": "^1.15.6",
     "mastra": "1.31.3",
