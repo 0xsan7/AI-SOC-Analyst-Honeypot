@@ -125,6 +125,8 @@ npm run dashboard   # http://127.0.0.1:4173
 npm run mcp         # MCP server on stdio
 ```
 
+![SOC Analyst dashboard: 20 events over 24h, 15 campaigns, top source IPs, and a live event stream](docs/dashboard.png)
+
 ## Commands
 
 | Command | What it does |
