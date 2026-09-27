@@ -12,26 +12,29 @@
     />
     <style>
       :root {
-        /* Warm purple-black canvas — never pure black. */
-        --bg: #0a0812;
-        --bg-deep: #070510;
-        --surface: #14101f;
-        --surface-2: #1b1628;
-        --surface-3: #241d33;
-        --border: #2b2340;
-        --border-lit: #3d3258;
-        --text: #f2effa;
-        --text-dim: #b4abc9;
-        --muted: #837a9c;
-        --accent: #7c6cf0;
-        --accent-dim: #5a4bb8;
-        --lime: #c2ef4e;
+        /* Black-and-grey dual tone. Severity is the only chromatic signal,
+           and it is desaturated so the console reads as an instrument. */
+        --bg: #08090a;
+        --bg-deep: #000000;
+        --surface: #0f1011;
+        --surface-2: #16181a;
+        --surface-3: #1e2124;
+        --border: #24272a;
+        --border-lit: #33373b;
+        --text: #f4f4f5;
+        --text-dim: #a1a1aa;
+        --muted: #71717a;
+        --accent: #d4d4d8;
+        --accent-dim: #a1a1aa;
+        --lime: #a3a3a3;
 
-        --s1: #4a9eff;
-        --s2: #22c55e;
-        --s3: #eab308;
-        --s4: #f97316;
-        --s5: #ef4444;
+        /* Severity ramp: steel -> amber -> red. Low tiers stay near-neutral
+           so only genuinely dangerous events pull colour. */
+        --s1: #52525b;
+        --s2: #71717a;
+        --s3: #a16207;
+        --s4: #c2410c;
+        --s5: #dc2626;
 
         --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
         --sans: 'Rubik', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -42,10 +45,7 @@
 
       body {
         margin: 0;
-        background:
-          radial-gradient(1100px 520px at 12% -8%, rgba(124, 108, 240, 0.13), transparent 62%),
-          radial-gradient(820px 420px at 92% 0%, rgba(194, 239, 78, 0.05), transparent 58%),
-          var(--bg);
+        background: var(--bg);
         color: var(--text);
         font-family: var(--sans);
         font-size: 14px;
@@ -109,15 +109,15 @@
         margin-bottom: 26px;
         position: sticky;
         top: 0;
-        background: linear-gradient(var(--bg) 72%, transparent);
+        background: rgba(8,9,10,.92);
         backdrop-filter: blur(12px);
         z-index: 10;
       }
       .logo {
         width: 34px; height: 34px; border-radius: 9px; flex: none;
-        background: linear-gradient(140deg, var(--accent), var(--accent-dim));
+        background: linear-gradient(140deg, #3f3f46, #18181b);
         display: grid; place-items: center;
-        box-shadow: 0 0 0 1px rgba(124,108,240,.35), 0 6px 18px -6px rgba(124,108,240,.6);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 6px 18px -8px rgba(0,0,0,.9);
       }
       .logo svg { width: 19px; height: 19px; }
       .brand h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
@@ -128,20 +128,20 @@
       .live {
         display: inline-flex; align-items: center; gap: 7px;
         padding: 5px 11px 5px 9px; border-radius: 999px;
-        background: rgba(34,197,94,.09); border: 1px solid rgba(34,197,94,.28);
+        background: rgba(255,255,255,.04); border: 1px solid var(--border-lit);
         font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
-        color: #6ee7a0;
+        color: var(--text-dim);
       }
-      .dot { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; animation: pulse 1.9s ease-in-out infinite; }
+      .dot { width: 6px; height: 6px; border-radius: 50%; background: #52525b; animation: pulse 1.9s ease-in-out infinite; }
       @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.8); } }
       .clock { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
 
       .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
       .kpi {
-        background: linear-gradient(168deg, var(--surface-2), var(--surface));
+        background: var(--surface);
         border: 1px solid var(--border); border-radius: var(--r);
         padding: 16px 18px 14px; position: relative; overflow: hidden;
-        box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 10px 24px -18px rgba(0,0,0,.9);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
       }
       .kpi::after {
         content: ''; position: absolute; inset: 0 0 auto; height: 1px;
@@ -153,18 +153,18 @@
       }
       .kpi .k-val { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; margin: 8px 0 2px; font-variant-numeric: tabular-nums; }
       .kpi .k-sub { font-size: 11.5px; color: var(--text-dim); font-family: var(--mono); }
-      .kpi.crit .k-val { color: var(--s5); }
-      .kpi.warn .k-val { color: var(--s4); }
-      .kpi.good .k-val { color: var(--s2); }
+      .kpi.crit .k-val { color: #ef4444; }
+      .kpi.warn .k-val { color: #d4d4d8; }
+      .kpi.good .k-val { color: #d4d4d8; }
 
       .grid { display: grid; gap: 14px; margin-bottom: 14px; }
       .g-2 { grid-template-columns: 1.62fr 1fr; }
       .g-2e { grid-template-columns: 1fr 1fr; }
 
       .panel {
-        background: linear-gradient(180deg, var(--surface), var(--bg-deep));
+        background: var(--surface);
         border: 1px solid var(--border); border-radius: var(--r);
-        box-shadow: 0 1px 0 rgba(255,255,255,.025) inset, 0 14px 32px -26px rgba(0,0,0,1);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
         display: flex; flex-direction: column; min-width: 0;
       }
       .p-head {
@@ -176,7 +176,7 @@
       .p-body { padding: 16px; flex: 1; min-width: 0; }
 
       .chart { width: 100%; height: 208px; display: block; overflow: visible; }
-      .grid-line { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 4; }
+      .grid-line { stroke: #1c1e20; stroke-width: 1; stroke-dasharray: 3 4; }
       .axis-txt { fill: var(--muted); font-size: 10px; font-family: var(--mono); }
       .bar { transition: opacity .15s; }
       .bar:hover { opacity: .75; }
@@ -193,18 +193,20 @@
       .rank-row .geo { font-size: 11px; color: var(--muted); margin-left: 7px; }
       .rank-row .ct { font-family: var(--mono); font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
       .track { height: 5px; background: var(--surface-3); border-radius: 3px; overflow: hidden; margin-top: 5px; }
-      .fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent-dim), var(--accent)); }
+      .fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #3f3f46, #71717a); }
 
       .sev {
         display: inline-flex; align-items: center; gap: 5px;
         font-family: var(--mono); font-size: 10.5px; font-weight: 700;
         padding: 2px 8px; border-radius: 5px; letter-spacing: .04em;
       }
-      .sev.s1 { color: #9ccbff; background: rgba(74,158,255,.14); }
-      .sev.s2 { color: #86efac; background: rgba(34,197,94,.14); }
-      .sev.s3 { color: #fde047; background: rgba(234,179,8,.14); }
-      .sev.s4 { color: #fdba74; background: rgba(249,115,22,.16); }
-      .sev.s5 { color: #fca5a5; background: rgba(239,68,68,.18); }
+      /* Severity pills: hairline border + tinted text, no saturated fill. */
+      .sev { border: 1px solid currentColor; background: transparent; }
+      .sev.s1 { color: #8b8b95; }
+      .sev.s2 { color: #a1a1aa; }
+      .sev.s3 { color: #d4a017; }
+      .sev.s4 { color: #ea7317; }
+      .sev.s5 { color: #ef4444; background: rgba(239,68,68,.08); }
 
       .camps { display: flex; flex-direction: column; }
       .camp {
@@ -213,7 +215,7 @@
         transition: background .14s;
       }
       .camp:last-child { border-bottom: none; }
-      .camp:hover { background: rgba(124,108,240,.05); }
+      .camp:hover { background: rgba(255,255,255,.025); }
       .camp .cid { font-family: var(--mono); font-size: 12px; color: var(--text); }
       .camp .cmeta { grid-column: 1 / -1; font-size: 11.5px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }
       .cmeta b { color: var(--text-dim); font-weight: 500; }
@@ -232,7 +234,7 @@
       @keyframes slide { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
       .ev .t { color: var(--muted); font-size: 11px; }
       .ev .who { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .ev .cmd { color: var(--lime); }
+      .ev .cmd { color: #d4d4d8; }
 
       .empty { padding: 34px 16px; text-align: center; color: var(--muted); font-size: 13px; }
       .empty code { font-family: var(--mono); color: var(--text-dim); }
@@ -307,7 +309,7 @@
         String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
       const SEV_CLASS = ['', 's1', 's2', 's3', 's4', 's5'];
       const SEV_NAME = ['', 'Info', 'Low', 'Medium', 'High', 'Critical'];
-      const SEV_COLOR = ['', '#4a9eff', '#22c55e', '#eab308', '#f97316', '#ef4444'];
+      const SEV_COLOR = ['', '#52525b', '#71717a', '#a16207', '#c2410c', '#dc2626'];
       const CLASS_NAME = {
         noise: 'Noise',
         recon: 'Recon',
@@ -456,7 +458,7 @@
             <div class="cmeta">
               <span><b>${c.n}</b> event${c.n === 1 ? '' : 's'}</span>
               <span>${new Date(c.first).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – ${new Date(c.last).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-              ${cmds.map((t) => `<span style="font-family:var(--mono);color:var(--lime)">${esc(t)}</span>`).join('')}
+              ${cmds.map((t) => `<span style="font-family:var(--mono);color:#a1a1aa">${esc(t)}</span>`).join('')}
             </div>
           </div>`;
             })

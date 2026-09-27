@@ -22,14 +22,13 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = "default", size = "default", className = "", children, ...props }, ref) => {
     const baseStyles =
-      "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 disabled:pointer-events-none disabled:opacity-50";
+      "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-body/40 disabled:pointer-events-none disabled:opacity-50";
 
     const variants: Record<ButtonVariant, string> = {
       default: "bg-white text-black hover:bg-gray-100",
-      secondary: "bg-gray-800 text-white hover:bg-gray-700",
-      ghost: "hover:bg-gray-800/50 text-white",
-      gradient:
-        "bg-gradient-to-b from-white via-white/95 to-white/60 text-black hover:scale-105 active:scale-95",
+      secondary: "border border-line-lit bg-raised text-body hover:bg-[#1f1f1f]",
+      ghost: "text-muted hover:bg-raised hover:text-body",
+      gradient: "bg-body text-ink hover:bg-white active:scale-[0.98]",
     };
 
     const sizes: Record<ButtonSize, string> = {
@@ -61,11 +60,11 @@ const Navigation = React.memo(() => {
   const [open, setOpen] = React.useState(false);
 
   return (
-    <header className="fixed top-0 z-50 w-full border-b border-gray-800/50 bg-black/80 backdrop-blur-md">
+    <header className="fixed top-0 z-50 w-full border-b border-line bg-ink/80 backdrop-blur-md">
       <nav className="mx-auto max-w-7xl px-6 py-4">
         <div className="flex items-center justify-between">
           <a href="./" className="flex items-center gap-2 text-lg font-semibold text-white">
-            <Shield className="h-5 w-5 text-accent" aria-hidden />
+            <Shield className="h-5 w-5 text-body" aria-hidden />
             SOC Analyst
           </a>
 
@@ -74,7 +73,7 @@ const Navigation = React.memo(() => {
               <a
                 key={l.label}
                 href={l.href}
-                className="text-sm text-white/60 transition-colors hover:text-white"
+                className="text-sm text-muted transition-colors hover:text-body"
               >
                 {l.label}
               </a>
@@ -104,19 +103,19 @@ const Navigation = React.memo(() => {
       </nav>
 
       {open && (
-        <div className="animate-[slideDown_0.3s_ease-out] border-t border-gray-800/50 bg-black/95 backdrop-blur-md md:hidden">
+        <div className="animate-[slideDown_0.3s_ease-out] border-t border-line bg-ink/95 backdrop-blur-md md:hidden">
           <div className="flex flex-col gap-4 px-6 py-4">
             {NAV_LINKS.map((l) => (
               <a
                 key={l.label}
                 href={l.href}
-                className="py-2 text-sm text-white/60 transition-colors hover:text-white"
+                className="py-2 text-sm text-muted transition-colors hover:text-body"
                 onClick={() => setOpen(false)}
               >
                 {l.label}
               </a>
             ))}
-            <div className="flex flex-col gap-2 border-t border-gray-800/50 pt-4">
+            <div className="flex flex-col gap-2 border-t border-line pt-4">
               <Button variant="ghost" size="sm" onClick={() => (window.location.href = "./dashboard.html")}>
                 Live dashboard
               </Button>
@@ -158,13 +157,13 @@ const Hero = React.memo(() => {
         }
       `}</style>
 
-      <aside className="mb-8 inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-full border border-gray-700 bg-gray-800/50 px-4 py-2 backdrop-blur-sm">
-        <span className="whitespace-nowrap text-center text-xs text-gray-400">
+      <aside className="mb-8 inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-full border border-line bg-panel px-4 py-2 backdrop-blur-sm">
+        <span className="whitespace-nowrap text-center text-xs text-muted">
           Runs entirely on your own hardware
         </span>
         <a
           href="#setup"
-          className="flex items-center gap-1 whitespace-nowrap text-xs text-gray-400 transition-all hover:text-white active:scale-95"
+          className="flex items-center gap-1 whitespace-nowrap text-xs text-muted transition-all hover:text-body active:scale-95"
         >
           See setup
           <ArrowRight size={12} />
@@ -185,7 +184,7 @@ const Hero = React.memo(() => {
         becomes a report
       </h1>
 
-      <p className="mb-10 max-w-2xl px-6 text-center text-sm text-gray-400 md:text-base">
+      <p className="mb-10 max-w-2xl px-6 text-center text-sm text-muted md:text-base">
         A self-hosted SSH honeypot that hands every login attempt to an LLM, grades it,
         groups repeat offenders into campaigns, and writes the incident report for you.
       </p>
@@ -217,7 +216,7 @@ const Hero = React.memo(() => {
           style={{
             height: 320,
             background:
-              "radial-gradient(ellipse at center, rgba(124,108,240,0.35), transparent 70%)",
+              "radial-gradient(ellipse at center, rgba(255,255,255,0.16), transparent 70%)",
             filter: "blur(40px)",
           }}
         />
@@ -225,7 +224,7 @@ const Hero = React.memo(() => {
           <img
             src="./dashboard.png"
             alt="SOC Analyst dashboard showing attack volume by severity, top source IPs, open campaigns, and a live event stream"
-            className="w-full rounded-lg border border-gray-800 shadow-2xl"
+            className="w-full rounded-lg border border-line-lit shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)]"
             loading="eager"
           />
         </div>
@@ -241,17 +240,17 @@ const Pipeline = React.memo(() => {
       <h2 className="mb-3 text-3xl font-medium tracking-tight md:text-4xl">
         Five stages, one command
       </h2>
-      <p className="mb-14 max-w-2xl text-gray-400">
+      <p className="mb-14 max-w-2xl text-muted">
         Each stage is a separate, testable step. The only one that calls an LLM is
         triage — correlation and reporting are deterministic, so they keep working
         when a quota runs out.
       </p>
-      <ol className="grid gap-px overflow-hidden rounded-lg border border-gray-800 bg-gray-800 md:grid-cols-2 lg:grid-cols-5">
+      <ol className="grid gap-px overflow-hidden rounded-lg border border-line bg-line md:grid-cols-2 lg:grid-cols-5">
         {STAGES.map((s) => (
-          <li key={s.n} className="bg-surface p-6">
-            <span className="font-mono text-xs text-accent">{s.n}</span>
+          <li key={s.n} className="bg-panel p-6 transition-colors hover:bg-raised">
+            <span className="font-mono text-xs text-faint">{s.n}</span>
             <h3 className="mb-2 mt-3 text-lg font-medium">{s.t}</h3>
-            <p className="text-sm leading-relaxed text-gray-400">{s.d}</p>
+            <p className="text-sm leading-relaxed text-muted">{s.d}</p>
           </li>
         ))}
       </ol>
@@ -262,16 +261,16 @@ Pipeline.displayName = "Pipeline";
 
 const Setup = React.memo(() => {
   return (
-    <section id="setup" className="border-t border-gray-800/50 bg-black/40">
+    <section id="setup" className="border-t border-line bg-surface">
       <div className="mx-auto max-w-7xl px-6 py-24">
         <h2 className="mb-3 text-3xl font-medium tracking-tight md:text-4xl">
           Clone and run
         </h2>
-        <p className="mb-10 max-w-2xl text-gray-400">
+        <p className="mb-10 max-w-2xl text-muted">
           No API key needed for the demo path. Seed synthetic events, correlate them,
           and open the dashboard.
         </p>
-        <pre className="overflow-x-auto rounded-lg border border-gray-800 bg-black p-6 font-mono text-sm leading-relaxed text-gray-300">
+        <pre className="overflow-x-auto rounded-lg border border-line bg-ink p-6 font-mono text-sm leading-relaxed text-muted">
           <code>{`git clone https://github.com/0xsan7/Honeypot.git
 cd Honeypot
 npm install
@@ -294,12 +293,12 @@ npm run pipeline`}</code>
 Setup.displayName = "Setup";
 
 const Footer = React.memo(() => (
-  <footer className="border-t border-gray-800/50 px-6 py-10">
-    <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 text-sm text-gray-500 md:flex-row">
+  <footer className="border-t border-line px-6 py-10">
+    <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 text-sm text-faint md:flex-row">
       <p>Defensive research tool. Attacker commands are recorded and simulated, never executed.</p>
       <a
         href="https://github.com/0xsan7/Honeypot"
-        className="flex items-center gap-2 transition-colors hover:text-white"
+        className="flex items-center gap-2 transition-colors hover:text-body"
       >
         <Github className="h-4 w-4" />
         0xsan7/Honeypot
@@ -311,7 +310,7 @@ Footer.displayName = "Footer";
 
 export default function Component() {
   return (
-    <main className="min-h-screen bg-surface text-white">
+    <main className="min-h-screen bg-ink text-body">
       <Navigation />
       <Hero />
       <Pipeline />

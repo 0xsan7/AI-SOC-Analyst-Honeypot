@@ -7,9 +7,9 @@
     scroll-behavior: smooth;
   }
   body {
-    @apply bg-surface font-sans text-white antialiased;
+    @apply bg-ink font-sans text-body antialiased;
   }
   ::selection {
-    @apply bg-white/25 text-white;
+    @apply bg-body/20 text-body;
   }
 }
