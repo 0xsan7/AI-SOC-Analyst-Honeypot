@@ -144,6 +144,26 @@ one-event campaign -- a shape the seed data does not normally produce.
 Added `tests/report.test.ts` and confirmed it is not a vacuous pass: reverting
 the wording fails 2 of its 6 assertions.
 
+## D12 — Concurrency test kept out of `test:all`
+
+`scripts/test-concurrency.ts` fires N simultaneous SSH sessions at a live
+honeypot and asserts every one produces exactly one uniquely-identified event.
+Deliberately NOT in test:all: it needs a running listener, and test:all must
+stay runnable on a clean checkout with no server. Run with
+`npm run test:concurrency` (honeypot up) or `npm run verify:honeypot`.
+
+Passed at both 12 and 40 concurrent sessions with zero uncaught errors and no
+duplicate ids, so no honeypot change was needed -- the per-connection isolation
+added earlier holds under load. Recorded because "it passed" is not the same as
+"it is covered by the default suite".
+
+## D13 — Two API-contract details found by writing tests
+
+`getCampaign()` returns `null`, not `undefined`, for a missing id. Harmless
+today (the MCP tool uses `?? c`) but a test asserting `undefined` failed, which
+is the point of writing it down. Also confirmed `listCampaigns()` on a fresh
+install returns `[]` rather than throwing -- the first thing a real user hits.
+
 ## D11 — Correlation is idempotent (checked, not changed)
 
 Worried that re-running `npm run correlate` would duplicate every campaign.

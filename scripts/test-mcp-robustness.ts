@@ -76,6 +76,18 @@ await hostile("huge limit does not crash", "get_recent_campaigns", { limit: 9999
 const alive = (await client.listTools()) as { tools: Array<{ name: string }> };
 check("server survived every hostile call", alive.tools.length === 3, `${alive.tools.length} tools`);
 
+// A brand-new install has no campaigns at all. That is the first thing a
+// real user hits, and it must be an empty list -- not an error, and not a
+// crash on an undefined field.
+const empty = (await client.callTool({ name: "get_recent_campaigns", arguments: {} })) as {
+  isError?: boolean;
+  content?: Array<{ text?: string }>;
+};
+const emptyText = (empty.content ?? []).map((c) => c.text ?? "").join("");
+check("an empty store returns an empty list, not an error",
+  empty.isError !== true && /"campaigns"\s*:\s*\[\]/.test(emptyText),
+  emptyText.slice(0, 60));
+
 await client.close();
 rmSync(work, { recursive: true, force: true });
 console.log(failures === 0 ? "\nMCP ROBUSTNESS TEST: PASS" : `\nMCP ROBUSTNESS TEST: ${failures} FAILURE(S)`);

@@ -122,3 +122,56 @@ describe('report threshold (FR6)', () => {
     expect(await store.needsReport(c)).toBe(false);
   });
 });
+
+describe('degenerate shapes', () => {
+  it('returns an empty list, not an error, when nothing is stored', async () => {
+    // A fresh install has no campaigns. This is the first thing a real user
+    // sees, so it must not throw on an undefined field.
+    const store = await freshStore();
+    await store.initStore();
+    expect(await store.listCampaigns()).toEqual([]);
+    expect(await store.listCampaigns(5)).toEqual([]);
+  });
+
+  it('returns null for a campaign that does not exist', async () => {
+    // The MCP tool does `(await getCampaign(id)) ?? c`, so a null here is
+    // handled -- but it must be null, not a throw on an undefined field.
+    const store = await freshStore();
+    await store.initStore();
+    expect(await store.getCampaign('no-such-id')).toBeNull();
+  });
+
+  it('handles a campaign with exactly one event', async () => {
+    const store = await freshStore();
+    await store.initStore();
+    const c = await store.correlate(event('198.51.100.1', 10, 2));
+    expect(c!.eventIds).toHaveLength(1);
+    expect(c!.maxSeverity).toBe(2);
+    expect(c!.sourceIps).toEqual(['198.51.100.1']);
+    // One low-severity event is below both report thresholds.
+    expect(store.shouldGenerateReport(c!)).toBe(false);
+  });
+
+  it('closes nothing when every campaign is still active', async () => {
+    const store = await freshStore();
+    await store.initStore();
+    const c = await store.correlate(event('198.51.100.1', 10, 3));
+    const DAY = 24 * 60 * 60 * 1000;
+    // A just-created campaign must not close under a 24h window.
+    expect(await store.closeIdleCampaigns(new Date(), DAY)).toEqual([]);
+    expect((await store.getCampaign(c!.id))!.status).toBe('open');
+  });
+
+  it('closes an idle campaign and is idempotent', async () => {
+    const store = await freshStore();
+    await store.initStore();
+    const c = await store.correlate(event('198.51.100.1', 10, 3));
+    const DAY = 24 * 60 * 60 * 1000;
+    const future = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    const closed = await store.closeIdleCampaigns(future, DAY);
+    expect(closed).toContain(c!.id);
+    // A second call must find nothing left to close.
+    expect(await store.closeIdleCampaigns(future, DAY)).toEqual([]);
+    expect((await store.getCampaign(c!.id))!.status).toBe('closed');
+  });
+});

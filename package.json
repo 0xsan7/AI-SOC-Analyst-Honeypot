@@ -19,7 +19,8 @@
     "test:all": "tsc -p tsconfig.json --noEmit && vitest run && tsx scripts/test-mcp-wire.ts && tsx scripts/test-mcp-robustness.ts && tsx scripts/test-pipeline-failure.ts && tsx scripts/test-auto-close.ts",
     "test:autoclose": "tsx scripts/test-auto-close.ts",
     "test:mcp-robustness": "tsx scripts/test-mcp-robustness.ts",
-    "verify:honeypot": "tsx scripts/verify-honeypot.ts"
+    "verify:honeypot": "tsx scripts/verify-honeypot.ts",
+    "test:concurrency": "tsx scripts/test-concurrency.ts"
   },
   "name": "soc-analyst",
   "version": "1.0.0",

@@ -23,6 +23,7 @@ npm run test:all
 | `npm run test:pipeline` | nothing | ~15s | Pipeline fails loudly without a key |
 | `npm run test:autoclose` | nothing | ~15s | Campaign auto-close persists |
 | `npm run verify:honeypot` | honeypot running | ~3s | No-execution invariant |
+| `npm run test:concurrency` | honeypot running | ~10s | N simultaneous sessions, one event each |
 
 ---
 
@@ -69,6 +70,22 @@ Check it yourself too:
 ls /tmp/soc-verify-pwned 2>/dev/null && echo "BREACH" || echo "safe"
 grep -c wget data/events.jsonl
 ```
+
+## Concurrency
+
+A public port is scanned by many hosts at once, so simultaneous connections
+are the normal case:
+
+```bash
+npm run honeypot            # terminal 1
+npm run test:concurrency    # terminal 2
+CONCURRENCY=40 npm run test:concurrency   # push it harder
+```
+
+**Pass:** every session completes, all N events are recorded with **unique**
+ids, all N usernames appear, the listener still accepts connections
+afterwards, and no payload executed. Duplicated ids here would mean
+interleaved sessions clobbering each other — the bug this catches.
 
 ## FR2–3 — Normalizer validates and skips bad lines
 
