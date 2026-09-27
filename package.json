@@ -1,9 +1,4 @@
 {
-  "name": "soc-analyst",
-  "version": "1.0.0",
-  "description": "A general-purpose Mastra agent with a local workspace, shell tools, memory, task tracking, web access, and recurring schedules.",
-  "main": "index.js",
-  "private": true,
   "scripts": {
     "dev": "mastra dev",
     "build": "mastra build",
@@ -15,6 +10,7 @@
     "dashboard": "tsx scripts/dashboard.ts",
     "mcp": "tsx src/mastra/mcp-server.ts",
     "probe": "tsx scripts/probe-honeypot.ts",
+    "setup": "tsx scripts/setup.ts",
     "keys": "mkdir -p honeypot/keys && ssh-keygen -t rsa -b 2048 -f honeypot/keys/host_rsa -N \"\" -q && ssh-keygen -t ed25519 -f honeypot/keys/host_ed25519 -N \"\" -q",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -25,6 +21,11 @@
     "test:mcp-robustness": "tsx scripts/test-mcp-robustness.ts",
     "verify:honeypot": "tsx scripts/verify-honeypot.ts"
   },
+  "name": "soc-analyst",
+  "version": "1.0.0",
+  "description": "A general-purpose Mastra agent with a local workspace, shell tools, memory, task tracking, web access, and recurring schedules.",
+  "main": "index.js",
+  "private": true,
   "keywords": [],
   "author": "",
   "license": "Apache-2.0",

@@ -39,19 +39,61 @@ function safeJoin(root: string, rel: string): string | null {
   return full.startsWith(root) ? full : null;
 }
 
+/**
+ * Shown at / when web/ has not been built. A raw 404 body ("landing page not
+ * built") looks like a broken server rather than a missing build step, and a
+ * stranger hitting it has no reason to guess what to run. Black/grey to match
+ * the rest of the site.
+ */
+const LANDING_FALLBACK = `<!doctype html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOC Analyst — landing page not built</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center;
+         background:#0a0a0a; color:#e5e5e5;
+         font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:34rem; padding:2.5rem; }
+  h1 { font-size:1.25rem; font-weight:600; margin:0 0 .75rem; letter-spacing:-.01em; }
+  p  { color:#a3a3a3; line-height:1.6; margin:0 0 1.25rem; }
+  code { background:#171717; border:1px solid #262626; border-radius:6px;
+         padding:.2rem .45rem; font-family:ui-monospace,"JetBrains Mono",monospace; font-size:.875rem; }
+  pre { background:#171717; border:1px solid #262626; border-radius:8px;
+        padding:1rem; overflow-x:auto; margin:0 0 1.25rem;
+        font-family:ui-monospace,"JetBrains Mono",monospace; font-size:.875rem; color:#e5e5e5; }
+  a { color:#e5e5e5; }
+  .muted { color:#737373; font-size:.875rem; margin-top:2rem; }
+</style></head>
+<body><main>
+  <h1>The landing page has not been built</h1>
+  <p>The SOC console is already running — <a href="/dashboard">open it</a>.</p>
+  <p>To build this page:</p>
+  <pre>cd web
+npm install
+npm run build</pre>
+  <p>Or run <code>npm run setup</code> from the repo root to do keys and the
+     frontend build in one step.</p>
+  <p class="muted">AI SOC Analyst</p>
+</main></body></html>`;
+
 createServer(async (req, res) => {
   const path = (req.url ?? '/').split('?')[0];
 
   // Routes: / -> landing page, /dashboard -> console, /dashboard/* -> its assets.
   if (path === '/' || path === '/index.html') {
     const html = safeJoin(WEB_DIST, 'index.html');
-    if (!html) return res.writeHead(404).end('landing page not built — run `npm run build` in web/');
-    try {
-      const body = await readFile(html);
-      return res.writeHead(200, { 'content-type': TYPES['.html'] }).end(body);
-    } catch {
-      return res.writeHead(404).end('landing page not built — run `npm run build` in web/');
+    if (html && existsSync(html)) {
+      try {
+        const body = await readFile(html);
+        return res.writeHead(200, { 'content-type': TYPES['.html'] }).end(body);
+      } catch {
+        /* fall through to the notice below */
+      }
     }
+    // Not built yet. 200 with an explanation beats a 404 that reads like a
+    // broken server -- and the console is still one click away.
+    return res.writeHead(200, { 'content-type': TYPES['.html'] }).end(LANDING_FALLBACK);
   }
 
   if (path === '/dashboard' || path === '/dashboard/') {
