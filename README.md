@@ -121,11 +121,26 @@ npm run correlate   # group into campaigns, generate reports
 Then view it:
 
 ```bash
-npm run dashboard   # http://127.0.0.1:4173
+npm run dashboard   # landing page at /, console at /dashboard
 npm run mcp         # MCP server on stdio
 ```
 
-![SOC Analyst dashboard: 20 events over 24h, 15 campaigns, top source IPs, and a live event stream](docs/dashboard.png)
+The site has two views: a React landing page at `/` and the live SOC console at `/dashboard`.
+
+![SOC Analyst landing page](docs/landing.png)
+
+## Building the site
+
+The landing page is a Vite + React + Tailwind app in `web/`, kept separate from the
+Mastra backend. The console (`src/mastra/public/dashboard.html`) is dependency-free
+static HTML and needs no build step.
+
+```bash
+cd web && npm install && npm run build
+```
+
+`npm run dashboard` serves the built output; if `web/dist` is missing it says so
+rather than failing silently.
 
 ## Commands
 

@@ -25,3 +25,12 @@ src/mastra/public/enriched.jsonl
 
 # macOS
 .DS_Store
+
+# Vite build output + deps for the landing page
+web/dist/
+web/node_modules/
+
+# Mastra storage that lands in the public dir
+src/mastra/public/*.db
+src/mastra/public/*.db-*
+src/mastra/public/*.duckdb*
