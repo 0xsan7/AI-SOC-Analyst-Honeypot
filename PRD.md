@@ -1,8 +1,18 @@
 # PRD: AI SOC Analyst — Agentic Honeypot Triage System
 
 **Owner:** [you]
-**Status:** Ready for build
+**Status:** Built; see `TESTING.md` for the verification standard
 **Target:** Autonomous build via coding agent (OpenCode), 2-day sprint
+
+> **Verification standard (added 2026-09-27, after a lesson paid for).**
+> A criterion below is satisfied only when it has been *executed end to end with
+> real inputs*. A tool appearing in a list, a handler existing, or a test that
+> never calls the thing it names does not count — those prove the code parses
+> and registers, which is strictly weaker than "it works".
+>
+> This is not academic. `ask_soc_agent` was broken on every call and the suite
+> was green, because the MCP test listed the tool and never invoked it. Before
+> trusting any new test, break the code it guards and confirm it goes red.
 
 ## 1. Summary
 

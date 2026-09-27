@@ -57,7 +57,12 @@ export const getCampaignDetailTool = createTool({
     // lookup and a client cannot tell "no such campaign" from "you sent
     // garbage" — which is exactly the silent-failure shape this tool should
     // not have.
-    campaignId: z.string().min(1, "campaignId must not be empty").trim(),
+    // Order matters: .trim() is a TRANSFORM, so `min(1).trim()` accepts "   "
+    // -- the length check runs on the untrimmed string and passes, then the
+    // value is trimmed to "". Trimming first rejects it as a malformed
+    // request, which is what this branch exists to distinguish from a
+    // genuinely unknown campaign id.
+    campaignId: z.string().trim().min(1, "campaignId must not be empty"),
   }),
   outputSchema: z.object({
     found: z.boolean(),

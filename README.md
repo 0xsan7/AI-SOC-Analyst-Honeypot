@@ -175,8 +175,12 @@ The site serves two views: a React landing page at `/` and the SOC console at
 | `npm run test:autoclose` | Campaign auto-close persists across processes |
 | `npm run test:http` | HTTP honeypot over a real socket (26 assertions) |
 | `npm run verify:honeypot` | No-execution invariant, against a running honeypot |
-| `npm run test:ask` | `ask_soc_agent` over a real MCP connection |
+| `npm run test:ask` | `ask_soc_agent` over a real MCP connection, live model |
 | `npm run test:studio` | Live trace recorded by Mastra Studio |
+
+`npm test` also covers both of the above with a mocked model at no cost, so a
+regression in either fails the default suite. The live variants prove the
+wiring against the real model; the mocked ones keep the guarantee permanent.
 | `npm run test:concurrency` | N simultaneous sessions, one event each |
 
 ## MCP server
@@ -371,7 +375,7 @@ src/
     agents/soc-agent.ts    memory-backed analyst agent
     public/dashboard.html  SOC console (no build step)
 scripts/                   pipeline, correlation, seeding, and 8 test harnesses
-tests/                     47 unit tests across 5 files
+tests/                     56 unit tests across 7 files
 web/                       React + Vite landing page (separate build)
 examples/                  committed sample reports, synthetic data only
 ```

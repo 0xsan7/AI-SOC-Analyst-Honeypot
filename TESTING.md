@@ -33,6 +33,34 @@ so the default suite stays runnable with no key and no cost.
 
 ---
 
+## The standard: execute it, don't inspect it
+
+An acceptance criterion is not satisfied until it has been executed end to end
+with real inputs. A tool appearing in a list, a handler existing, a test that
+never calls the thing it names — none of these count. They assert the code
+*parses and registers*, which is a strictly weaker claim than *works*.
+
+This is not a hypothetical. On 2026-09-27 `ask_soc_agent` — the tool that makes
+this an analyst rather than a log dumper — was broken on every single call. The
+agent built `Memory` with no storage provider, which does not fail at
+construction; it throws on the first invocation. The MCP wire test listed the
+tool and never called it, so the suite was green the whole time. It shipped
+that way because "the tool is registered" and "the tool works" were being
+treated as the same claim.
+
+The same gap appeared in the MCP handshake, the pipeline exit code, the honeypot
+verifier, and a test that passed because a stale process held the port. Treat a
+green suite as evidence the code runs, not evidence a feature works.
+
+Two rules that follow:
+
+1. **A test that does not call the thing it is named for is not a test of it.**
+2. **A test that cannot fail is worse than no test**, because it is counted.
+   Before trusting a new guard, break the code it guards and confirm it goes
+   red. Both files added for this (`tests/ask-soc-agent.test.ts`,
+   `tests/observability.test.ts`) were checked that way, and one of them
+   initially did *not* go red — which is how the weakness was found.
+
 ## Tests that need a live key or a running service
 
 ### `npm run test:ask` -- ask_soc_agent over MCP

@@ -198,6 +198,52 @@ Two things worth keeping from this:
 test:all because it needs a live Gemini key. Verified the test catches the
 bug: re-introducing the missing storage line makes 3 assertions fail.
 
+## D19 — zod `.trim()` after `.min(1)` does not reject whitespace
+
+Writing the mocked tests surfaced a real bug in the `campaignId` schema. The
+line was `z.string().min(1, "...").trim()`. In zod, `.trim()` is a TRANSFORM,
+applied after validation -- so `"   "` passed the length check (three
+characters), then got trimmed to `""`. The intent was to reject empty and
+whitespace-only ids as malformed requests, and it rejected neither.
+
+Fixed to `z.string().trim().min(1, "...")`.
+
+The MCP robustness test passed before and after, because it asserted the
+*response* was an error, and the trimmed-to-empty value happened to produce an
+error downstream. Only asserting on the schema itself caught it. This is the
+same class of bug as the ones in D17/D18: the test was checking a weaker
+property than the one claimed.
+
+## D20 — Mocked guards for the two live-API tests
+
+`test:ask` and `test:studio` need a Gemini key and a running Studio, so a
+regression in either could land silently. Added:
+
+- `tests/ask-soc-agent.test.ts` -- the real agent, Memory, LibSQL storage and
+  tools, with only the model mocked via `createMockModel` from
+  `@mastra/core/test-utils/llm-mock`. 5 tests, no key, no network.
+- `tests/observability.test.ts` -- a real Mastra instance with real
+  observability and a real workflow, no LLM. 4 tests, no key.
+
+Both were verified against deliberately broken code, because a guard that
+cannot fail is worse than no guard. Findings while building them, all recorded
+as comments in the tests:
+
+- A store with no `observabilityStrategy` makes `MastraStorageExporter` throw
+  during init; every run then "succeeds" and every `listTraces()` is empty.
+  Bare `LibSQLStore` is not enough -- `getStore("observability")` wraps it in
+  an `ObservabilityLibSQL` adapter that does have one. `DuckDBStore` matches
+  production (`src/mastra/index.ts`) and is what these tests use.
+- Spans take ~4s to flush. A fixed 2s sleep reads as "observability is broken"
+  when it is only late, so the test polls a bounded window.
+- `listTraces` takes no pagination args and returns `{ pagination, spans }`,
+  not `{ traces }`. Passing `page`/`perPage` throws a ZodError.
+
+The `observability` domain assertion was initially vacuous -- removing the
+domain entirely still passed, because the default-store fallback works. The
+comment said otherwise, so the comment was corrected and a separate assertion
+added that pins the adapter's strategy.
+
 ## D18 — Mastra Studio traces need the workflow run through Studio
 
 Tracing is configured correctly in `src/mastra/index.ts`, but spans are written
