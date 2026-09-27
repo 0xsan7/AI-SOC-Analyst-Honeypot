@@ -9,6 +9,7 @@
  */
 import React from "react";
 import { ArrowRight, Menu, X, Shield, Github } from "lucide-react";
+import { Footer } from "./footer-section";
 
 type ButtonVariant = "default" | "secondary" | "ghost" | "gradient";
 type ButtonSize = "default" | "sm" | "lg";
@@ -17,10 +18,12 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   children: React.ReactNode;
+  /** When set the button renders an <a> so it behaves like a real link. */
+  href?: string;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = "default", size = "default", className = "", children, ...props }, ref) => {
+  ({ variant = "default", size = "default", className = "", children, href, ...props }, ref) => {
     const baseStyles =
       "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-body/40 disabled:pointer-events-none disabled:opacity-50";
 
@@ -36,6 +39,21 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       sm: "h-10 px-5 text-sm",
       lg: "h-12 px-8 text-base",
     };
+
+    // When `href` is set, render an anchor: navigation gets middle-click,
+    // ctrl/cmd-click, "open in new tab", and keyboard access for free.
+    if (href) {
+      const external = /^https?:/i.test(href);
+      return (
+        <a
+          href={href}
+          className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
+          {...(external ? { target: "_blank", rel: "noreferrer" } : {})}
+        >
+          {children}
+        </a>
+      );
+    }
 
     return (
       <button
@@ -81,11 +99,11 @@ const Navigation = React.memo(() => {
           </div>
 
           <div className="hidden items-center gap-4 md:flex">
-            <Button variant="ghost" size="sm" onClick={() => (window.location.href = "https://github.com/0xsan7/Honeypot")}>
+            <Button variant="ghost" size="sm" href="https://github.com/0xsan7/Honeypot">
               <Github className="h-4 w-4" />
               Source
             </Button>
-            <Button size="sm" onClick={() => (window.location.href = "./dashboard.html")}>
+            <Button size="sm" href="./dashboard.html">
               Live dashboard
             </Button>
           </div>
@@ -116,7 +134,7 @@ const Navigation = React.memo(() => {
               </a>
             ))}
             <div className="flex flex-col gap-2 border-t border-line pt-4">
-              <Button variant="ghost" size="sm" onClick={() => (window.location.href = "./dashboard.html")}>
+              <Button variant="ghost" size="sm" href="./dashboard.html">
                 Live dashboard
               </Button>
             </div>
@@ -190,19 +208,14 @@ const Hero = React.memo(() => {
       </p>
 
       <div className="relative z-10 mb-16 flex items-center gap-4">
-        <Button
-          variant="gradient"
-          size="lg"
-          className="rounded-lg"
-          onClick={() => (window.location.href = "./dashboard.html")}
-        >
+        <Button variant="gradient" size="lg" className="rounded-lg" href="./dashboard.html">
           View live dashboard
         </Button>
         <Button
           variant="secondary"
           size="lg"
           className="rounded-lg"
-          onClick={() => (window.location.href = "https://github.com/0xsan7/Honeypot")}
+          href="https://github.com/0xsan7/Honeypot"
         >
           Source
         </Button>
@@ -292,30 +305,14 @@ npm run pipeline`}</code>
 });
 Setup.displayName = "Setup";
 
-const Footer = React.memo(() => (
-  <footer className="border-t border-line px-6 py-10">
-    <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 text-sm text-faint md:flex-row">
-      <p>Defensive research tool. Attacker commands are recorded and simulated, never executed.</p>
-      <a
-        href="https://github.com/0xsan7/Honeypot"
-        className="flex items-center gap-2 transition-colors hover:text-body"
-      >
-        <Github className="h-4 w-4" />
-        0xsan7/Honeypot
-      </a>
-    </div>
-  </footer>
-));
-Footer.displayName = "Footer";
-
 export default function Component() {
   return (
-    <main className="min-h-screen bg-ink text-body">
+    <div className="min-h-screen bg-ink text-body">
       <Navigation />
       <Hero />
       <Pipeline />
       <Setup />
       <Footer />
-    </main>
+    </div>
   );
 }
