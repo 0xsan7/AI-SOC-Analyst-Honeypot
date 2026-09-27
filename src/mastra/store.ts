@@ -36,12 +36,16 @@ export const CAMPAIGN_IDLE_CLOSE_MS = Number(
 
 let client: Client | null = null;
 
+/**
+ * Single source of truth for the LibSQL connection, so the campaign store and
+ * agent memory cannot drift onto different databases.
+ */
+export const DB_URL = process.env.TURSO_DATABASE_URL ?? "file:./soc-analyst.db";
+export const DB_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN ?? undefined;
+
 export function db(): Client {
   if (!client) {
-    client = createClient({
-      url: process.env.TURSO_DATABASE_URL ?? 'file:./soc-analyst.db',
-      authToken: process.env.TURSO_AUTH_TOKEN ?? undefined,
-    });
+    client = createClient({ url: DB_URL, authToken: DB_AUTH_TOKEN });
   }
   return client;
 }

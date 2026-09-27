@@ -175,6 +175,8 @@ The site serves two views: a React landing page at `/` and the SOC console at
 | `npm run test:autoclose` | Campaign auto-close persists across processes |
 | `npm run test:http` | HTTP honeypot over a real socket (26 assertions) |
 | `npm run verify:honeypot` | No-execution invariant, against a running honeypot |
+| `npm run test:ask` | `ask_soc_agent` over a real MCP connection |
+| `npm run test:studio` | Live trace recorded by Mastra Studio |
 | `npm run test:concurrency` | N simultaneous sessions, one event each |
 
 ## MCP server
@@ -368,7 +370,7 @@ src/
     mcp-server.ts          MCP exposure (3 tools)
     agents/soc-agent.ts    memory-backed analyst agent
     public/dashboard.html  SOC console (no build step)
-scripts/                   pipeline, correlation, seeding, and 6 test harnesses
+scripts/                   pipeline, correlation, seeding, and 8 test harnesses
 tests/                     47 unit tests across 5 files
 web/                       React + Vite landing page (separate build)
 examples/                  committed sample reports, synthetic data only
@@ -384,9 +386,16 @@ Complete and verified end to end: both honeypots, the triage workflow,
 correlation with auto-close, deterministic reporting, the MCP server, the
 dashboard, and the deployment documentation.
 
+All six PRD acceptance criteria are verified by real execution rather than
+inspection. Two of them (`ask_soc_agent` over MCP, and Studio traces) were
+silently broken until 2026-09-27 and are now covered by `npm run test:ask` and
+`npm run test:studio`. Both need a live Gemini key and a running Studio, so
+they sit outside `test:all`.
+
 Not yet done:
 
-- No live Mastra Studio trace capture or demo recording.
+- No demo recording of the console. `npm run test:studio` proves the trace
+  data exists; it is not a video.
 - Single-event campaigns are covered by tests, but the seed data does not
   produce them naturally.
 - Reputation enrichment is wired and degrades correctly, but has only been

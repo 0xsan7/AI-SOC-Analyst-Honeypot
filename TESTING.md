@@ -16,14 +16,49 @@ npm run test:all
 
 | Command | Needs | Time | Proves |
 | --- | --- | --- | --- |
-| `npm test` | nothing | ~5s | 25 unit tests, LLM mocked |
+| `npm test` | nothing | ~5s | 47 unit tests, LLM mocked |
 | `npm run typecheck` | nothing | ~5s | `tsc` clean |
 | `npm run test:mcp` | nothing | ~10s | Real MCP client handshake + tool calls |
 | `npm run test:mcp-robustness` | nothing | ~10s | 11 hostile inputs, no crash |
 | `npm run test:pipeline` | nothing | ~15s | Pipeline fails loudly without a key |
 | `npm run test:autoclose` | nothing | ~15s | Campaign auto-close persists |
+| `npm run test:http` | nothing | ~15s | HTTP honeypot over a real socket |
 | `npm run verify:honeypot` | honeypot running | ~3s | No-execution invariant |
 | `npm run test:concurrency` | honeypot running | ~10s | N simultaneous sessions, one event each |
+| `npm run test:ask` | Gemini key in `.env` | ~30s | `ask_soc_agent` answers from real data |
+| `npm run test:studio` | Gemini key + `npm run dev` | ~30s | Live trace appears in Mastra Studio |
+
+The last two are deliberately **not** in `test:all`: they spend a live API call,
+so the default suite stays runnable with no key and no cost.
+
+---
+
+## Tests that need a live key or a running service
+
+### `npm run test:ask` -- ask_soc_agent over MCP
+
+Seeds an isolated temporary store, starts a real MCP server as a child process,
+and asks a question that can only be answered from stored data.
+
+This covers a bug that was invisible for a long time. The agent declared
+`new Memory({ options })` with no storage provider. That does not fail when the
+agent is built -- it throws on the *first call*, so every question returned
+"Memory requires a storage provider to function". The MCP wire test only
+discovered the tool, never invoked it, so the suite stayed green.
+
+To confirm the test is not vacuous: delete the `storage:` line from
+`src/mastra/agents/soc-agent.ts` and three assertions fail.
+
+### `npm run test:studio` -- live trace in Mastra Studio
+
+Starts the `triageWorkflow` *through the Studio API* and polls
+`/api/observability/traces` until a span appears.
+
+The through-the-API detail matters. Spans are written to an in-process DuckDB
+observability store, so running triage from a separate script produces no
+visible trace regardless of what it does. The test also compares against a
+baseline span count, so it cannot pass on a trace left over from a previous
+run.
 
 ---
 

@@ -5,9 +5,10 @@
  */
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
+import { LibSQLStore } from "@mastra/libsql";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { getCampaign, getCampaignEvents, listCampaigns } from "../store";
+import { DB_AUTH_TOKEN, DB_URL, getCampaign, getCampaignEvents, listCampaigns } from "../store";
 
 export const SOC_MODEL = "google/gemini-3.5-flash";
 
@@ -135,6 +136,16 @@ Be concise and factual. Do not speculate about attacker identity or intent beyon
 what the recorded commands support.`,
   model: SOC_MODEL,
   memory: new Memory({
+    // Memory REQUIRES a storage provider in this Mastra version. Omitting it
+    // did not fail at construction -- it threw on the first call, so
+    // ask_soc_agent was returning "Memory requires a storage provider" for
+    // every question. Shares the campaign store's database so one TURSO_*
+    // config covers both.
+    storage: new LibSQLStore({
+      id: "soc-analyst-memory",
+      url: DB_URL,
+      authToken: DB_AUTH_TOKEN,
+    }),
     options: {
       // Terse titles; the model otherwise spends reasoning tokens on them.
       generateTitle: true,

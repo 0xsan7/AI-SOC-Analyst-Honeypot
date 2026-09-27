@@ -173,6 +173,49 @@ copying it live can be inconsistent. `npm run backup` does an online
 attempt documented a `sqlite3` CLI one-liner that would not have worked — the
 CLI is not installed and the DB is not plain sqlite.
 
+## D17 — ask_soc_agent was silently broken (found 2026-09-27)
+
+`ask_soc_agent` could not answer a single question. The agent declared
+`new Memory({ options })` with no `storage`, which this Mastra version requires.
+It does not fail at construction -- it throws on the FIRST call, so every
+question returned "Memory requires a storage provider to function". The wire
+test only listed the tool and never invoked it, so the suite stayed green.
+
+Fixed with `LibSQLStore` (the store Mastra itself constructs, not
+`MemoryLibSQL`, which is a different type). The campaign store and agent
+memory now share `DB_URL`/`DB_AUTH_TOKEN` from `store.ts`, so one TURSO_*
+config covers both.
+
+Two things worth keeping from this:
+
+- The parameter is `message`, not `question`. I assumed `question` first and
+  the tool returned a validation error naming the real field.
+- `StdioClientTransport` must be given an explicit `env`. Without it the child
+  gets a stripped environment and the model reports a missing API key even
+  though the parent process has one -- which looks exactly like a broken key.
+
+`npm run test:ask` covers it over a real MCP connection. It is NOT in
+test:all because it needs a live Gemini key. Verified the test catches the
+bug: re-introducing the missing storage line makes 3 assertions fail.
+
+## D18 — Mastra Studio traces need the workflow run through Studio
+
+Tracing is configured correctly in `src/mastra/index.ts`, but spans are written
+to an in-process DuckDB observability store. Calling `triageEvent()` from a
+separate script therefore produces no visible trace -- the exporter writes
+into a different store. The workflow has to be started through Studio's own
+API (`create-run` then `start`) for the trace to be visible there.
+
+Real route shapes, found by reading `@mastra/server/dist/server/handlers/`:
+`GET /api/observability/traces`, and the workflow run must be created with
+`POST /api/workflows/<id>/create-run?runId=<uuid>` before
+`POST /api/workflows/<id>/start?runId=<uuid>`. `/runs/:runId` is GET-only and
+returns 404 to a POST.
+
+`npm run test:studio` polls for the span rather than sleeping a fixed time, and
+compares against a baseline count so it cannot pass on a pre-existing trace.
+Excluded from test:all for the same Gemini-key reason as test:ask.
+
 ## D14 — HTTP honeypot (stretch goal, OQ3)
 
 `src/honeypot/http-server.ts`, same no-execution guarantee: every response from
