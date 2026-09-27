@@ -144,6 +144,35 @@ one-event campaign -- a shape the seed data does not normally produce.
 Added `tests/report.test.ts` and confirmed it is not a vacuous pass: reverting
 the wording fails 2 of its 6 assertions.
 
+## D16 — Hardened for public deployment (DEPLOY.md)
+
+Asked how to actually run this publicly. Two gaps made "deploy it" premature,
+so both are fixed rather than documented around:
+
+**Unbounded log.** A public SSH listener records an event per connection, so
+append-only `events.jsonl` fills the disk — which on a small VPS kills the
+pipeline, the database, and the SSH session you would use to fix it, all at
+once. `src/honeypot/event-log.ts` rotates at 50 MB keeping 5 generations
+(~250 MB ceiling). Rotation is a rename, which the normalizer's content anchor
+detects, so a rotated log is re-read rather than silently skipped.
+
+**No connection cap.** Each concurrent connection costs a socket and crypto
+state. `ConnectionLimiter` allows 64 concurrent / 8 per IP and refuses the NEW
+connection rather than killing a live one: a scanner retries, whereas dropping
+an established session discards the capture we want.
+
+The rotation test caught a real bug in the rotation code: `readdirSync` was
+passed the log FILE path, so it threw ENOTDIR, the error was swallowed as [],
+and pruning never ran — 200 writes produced 27 files instead of 4. Total bytes
+looked plausible, so a disk-usage check would not have caught it. Only the
+file-COUNT assertion did. 47 unit tests now (36 -> 47).
+
+**Backup via VACUUM INTO, not `cp`.** The store is LibSQL in WAL mode, so
+copying it live can be inconsistent. `npm run backup` does an online
+`VACUUM INTO`. Verified by reading 43 campaigns back out of the copy. My first
+attempt documented a `sqlite3` CLI one-liner that would not have worked — the
+CLI is not installed and the DB is not plain sqlite.
+
 ## D14 — HTTP honeypot (stretch goal, OQ3)
 
 `src/honeypot/http-server.ts`, same no-execution guarantee: every response from

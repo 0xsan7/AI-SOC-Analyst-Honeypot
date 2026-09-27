@@ -18,7 +18,8 @@
  * Run: npm run honeypot:http
  */
 import { randomUUID } from "node:crypto";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendEvent } from "./event-log";
+import { ConnectionLimiter } from "./connection-limiter";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,6 +30,8 @@ const LOG_PATH =
   process.env.HONEYPOT_LOG ?? resolve(HERE, "../../data/events.jsonl");
 
 /** Static replies. Keyed by first path segment; nothing here shells out. */
+const TYPES_HINT = "text/html; charset=utf-8";
+
 const PAGES: Record<string, { status: number; type: string; body: string }> = {
   "": {
     status: 200,
@@ -123,13 +126,8 @@ export function startHttpHoneypot() {
         },
       },
     };
-    try {
-      mkdirSync(dirname(LOG_PATH), { recursive: true });
-      appendFileSync(LOG_PATH, `${JSON.stringify(event)}\n`);
-    } catch (err) {
-      // Never let a logging failure kill capture.
-      console.error(`[honeypot:http] could not write event: ${(err as Error).message}`);
-    }
+    // Rotating append — see src/honeypot/event-log.ts. Never throws.
+    appendEvent(LOG_PATH, event);
     // Quiet by default: internet background traffic is high-volume.
     if (suspicious || process.env.HONEYPOT_VERBOSE) {
       console.log(
@@ -139,10 +137,20 @@ export function startHttpHoneypot() {
     }
   };
 
+  const limiter = new ConnectionLimiter();
+
   const server = createServer((req, res) => {
     const url = req.url ?? "/";
+    const ip = normalizeIp(req.socket.remoteAddress);
     const { probes } = classifyPath(url);
     const { status, type, body } = replyFor(url);
+
+    // Cap concurrency so a flood cannot exhaust the box. Refuse the new
+    // request rather than dropping an established one.
+    if (!limiter.acquire(ip)) {
+      res.writeHead(503, { "content-type": TYPES_HINT }).end();
+      return;
+    }
 
     // A redirect target for the phpmyadmin probe, so a scanner following
     // redirects lands back here rather than leaving the honeypot.
@@ -152,8 +160,12 @@ export function startHttpHoneypot() {
       res.writeHead(status, { "content-type": type }).end(body);
     }
 
-    // Record after responding so a slow client cannot delay the reply.
-    setImmediate(() => record(req, status, probes));
+    // Record after responding so a slow client cannot delay the reply, and
+    // release the slot when the response is done.
+    res.on("finish", () => {
+      limiter.release(ip);
+      setImmediate(() => record(req, status, probes));
+    });
   });
 
   // A honeypot faces malformed traffic constantly. A bad request must not

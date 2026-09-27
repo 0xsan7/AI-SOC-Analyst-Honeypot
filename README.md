@@ -285,6 +285,15 @@ connect**, the pipeline exited `0` while writing **zero enriched events**, and
 the honeypot verifier exited `0` with **nothing listening**. All three are
 failures that only show up across a real boundary.
 
+## Deploying
+
+See **[DEPLOY.md](DEPLOY.md)** for running this on a public VPS: provider
+choice, firewall, systemd units, backups, and what not to expose.
+
+Short version: the honeypots bind to `0.0.0.0` deliberately, but the dashboard
+and MCP server have **no authentication** and must stay on `127.0.0.1`, reached
+via `ssh -L 4173:127.0.0.1:4173 you@host`.
+
 ## Project layout
 
 ```

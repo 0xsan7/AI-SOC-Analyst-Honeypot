@@ -19,6 +19,7 @@ honeypot/keys/
 
 # Generated reports (examples/ holds a committed sample instead).
 reports/
+backup/
 
 # Dashboard serves this copy of the data file.
 src/mastra/public/enriched.jsonl

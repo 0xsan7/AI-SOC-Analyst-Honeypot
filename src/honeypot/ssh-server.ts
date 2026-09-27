@@ -12,7 +12,9 @@
  * honeypot/keys, at startup. Attacker-controlled input never reaches them.
  */
 import { randomUUID } from "node:crypto";
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { appendEvent } from "./event-log";
+import { ConnectionLimiter } from "./connection-limiter";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ssh2 from "ssh2";
@@ -49,8 +51,10 @@ function replyFor(cmd: string): string {
 }
 
 function log(event: AttackEvent) {
-  mkdirSync(dirname(LOG_PATH), { recursive: true });
-  appendFileSync(LOG_PATH, JSON.stringify(event) + "\n");
+  // Rotating append: a public listener records an event per connection, and
+  // an unbounded log fills the disk on a small VPS -- which takes down the
+  // pipeline, the database, and the SSH session used to fix it.
+  appendEvent(LOG_PATH, event);
 }
 
 export function startHoneypot(
@@ -66,11 +70,28 @@ export function startHoneypot(
     resolve(KEY_DIR, "host_ed25519"),
   ].map((p) => readFileSync(p, "utf8"));
 
+  const limiter = new ConnectionLimiter();
+
   const server = new Server(
     { hostKeys },
     (client: Connection, info: ClientInfo) => {
       const startedAt = Date.now();
       const sourceIp = info.ip;
+
+      // Cap concurrency. Refuse the NEW connection rather than killing a live
+      // one: a scanner retries, whereas dropping an established session throws
+      // away the capture we actually want.
+      if (!limiter.acquire(sourceIp)) {
+        console.log(`[honeypot] refusing ${sourceIp} (at capacity)`);
+        try { client.end(); } catch { /* already closed */ }
+        return;
+      }
+      let released = false;
+      const release = () => {
+        if (released) return;
+        released = true;
+        limiter.release(sourceIp);
+      };
       const commands: string[] = [];
       const sessionId = randomUUID();
       let username: string | null = null;
@@ -173,7 +194,10 @@ export function startHoneypot(
         });
       });
 
-      client.on("close", record);
+      client.on("close", () => {
+        record();
+        release();
+      });
     },
   );
 
