@@ -19,6 +19,7 @@ A public SSH port gets scanned constantly. Most of it is noise; some of it is a 
 This project automates the boring part:
 
 - **Honeypot** — a low-interaction SSH server that accepts any credential and answers from a static table. It records what was tried, never runs it.
+- **HTTP honeypot** — a second low-interaction listener (`npm run honeypot:http`) for the scanning that HTTP actually attracts: admin panels, `.env` and `.git` probes, traversal attempts. Same no-execution guarantee, same event format, so HTTP hits correlate and triage alongside SSH ones.
 - **Triage** — a Mastra workflow classifies each session (`noise` / `recon` / `credential_stuffing` / `active_exploit_attempt`) with an LLM-graded severity 1–5.
 - **Enrichment** — geolocation and ASN via `ip-api.com`, optional AbuseIPDB reputation. Every lookup degrades gracefully: a missing key or a dead network produces a warning, never a crash.
 - **Correlation** — events from the same source IP inside a 30-minute window collapse into one campaign, persisted in LibSQL so they survive restarts.
@@ -225,6 +226,8 @@ Add it to any MCP client (e.g. `claude_desktop_config.json`):
 | `HONEYPOT_PORT` | no | Defaults to `2222` |
 | `HONEYPOT_BIND` | no | Defaults to `127.0.0.1` (loopback) |
 | `HONEYPOT_LOG` | no | Defaults to `data/events.jsonl` |
+| `HTTP_HONEYPOT_PORT` | no | HTTP honeypot port, defaults to `8080` |
+| `HTTP_HONEYPOT_BIND` | no | Defaults to `127.0.0.1` (loopback) |
 | `CAMPAIGN_WINDOW_MS` | no | Correlation window, defaults to 30 minutes |
 | `CAMPAIGN_IDLE_CLOSE_MS` | no | Auto-close an idle campaign after this long, defaults to 24 hours |
 | `REPORT_DIR` | no | Defaults to `reports/` |

@@ -144,6 +144,43 @@ one-event campaign -- a shape the seed data does not normally produce.
 Added `tests/report.test.ts` and confirmed it is not a vacuous pass: reverting
 the wording fails 2 of its 6 assertions.
 
+## D14 — HTTP honeypot (stretch goal, OQ3)
+
+`src/honeypot/http-server.ts`, same no-execution guarantee: every response from
+a static table, no filesystem or network path driven by request data. Emits
+`service: "http"` events into the same log, so HTTP hits correlate and triage
+with no special handling — the schema already allowed `http` and nothing in
+the pipeline branches on service.
+
+Design calls: the phpmyadmin redirect points back inside the honeypot so a
+scanner following it does not leave; basic-auth usernames are captured but
+passwords never logged; the listener stays quiet on routine 404s because
+internet background traffic is high-volume (`HONEYPOT_VERBOSE` to see it).
+
+**The test nearly passed while testing nothing.** A stale honeypot from an
+earlier run still held port 8099, so the spawned child failed to bind, every
+request hit the old process, and 13 assertions passed against a server the test
+did not control — with no log file written. Added a pre-flight port check and
+an assertion that the child's own stdout shows it listening. Worth more than
+the feature: this is the third time in this project a green result was
+verifying the wrong thing (see D2, D4).
+
+Two bugs the test caught:
+- `npx` spawns a grandchild node process, so `child.kill()` orphaned the real
+  server and leaked the port into the next run. Now `detached: true` plus a
+  negative-pid kill to take down the process group. Verified over two
+  consecutive runs.
+- The source scan flagged `exec(` — it was `/regex/.exec()` in normalizeIp, not
+  command execution. Narrowed to patterns that cannot match a regex call.
+
+## D15 — IPv4-mapped IPv6 addresses unwrapped
+
+Node reports IPv4 clients on a dual-stack listener as `::ffff:203.0.113.5`.
+Left as-is, every IPv4 source IP fails geo/ASN lookup and correlates as an
+unrelated "unknown" campaign. Found because an end-to-end run printed
+`unknown` as the source for every event. Now unwrapped, with a test asserting
+no `::ffff:` reaches the log.
+
 ## D12 — Concurrency test kept out of `test:all`
 
 `scripts/test-concurrency.ts` fires N simultaneous SSH sessions at a live

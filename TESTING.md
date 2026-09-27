@@ -71,6 +71,33 @@ ls /tmp/soc-verify-pwned 2>/dev/null && echo "BREACH" || echo "safe"
 grep -c wget data/events.jsonl
 ```
 
+## HTTP honeypot (stretch)
+
+```bash
+npm run honeypot:http   # 127.0.0.1:8080
+```
+
+```bash
+curl -s localhost:8080/admin            # 401, like a real admin panel
+curl -s localhost:8080/.env             # decoy credentials
+curl -sI localhost:8080/phpmyadmin     # 302, stays inside the honeypot
+```
+
+Recorded events land in the same `data/events.jsonl` with `service: "http"`, so
+they flow through triage and correlation with no special handling — a run of
+admin/config probes from one IP becomes one campaign.
+
+Same security invariant: every response comes from a static table, and the
+source is scanned by the test to confirm no execution primitive exists.
+
+```bash
+npm run test:http    # 26 assertions over a real socket
+```
+
+Covers decoy responses, credential capture, six classes of hostile input
+(traversal, null byte, 4KB path, SQL-ish query, unicode, encoded traversal),
+a raw non-HTTP payload on the socket, and event integrity.
+
 ## Concurrency
 
 A public port is scanned by many hosts at once, so simultaneous connections
