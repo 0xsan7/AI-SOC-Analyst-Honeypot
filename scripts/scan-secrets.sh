@@ -1,7 +1,13 @@
 #!/bin/bash
 # Pre-publication secret scan. Reports pattern type + file path ONLY.
 # Never prints a matched value.
-cd /Users/santiagojerald/soc-analyst || exit 1
+#
+# Scans the repository containing THIS script, not a hardcoded path. An
+# earlier version did `cd /Users/santiagojerald/soc-analyst`, which meant a
+# copy of the script run anywhere else silently scanned the original repo --
+# so a test run against a repo with a planted key reported "clean" while the
+# key sat in the working copy unflagged. Always verify by planting a match.
+cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
 echo "=== history size ==="
 echo "commits: $(git rev-list --all --count)"
@@ -21,8 +27,9 @@ git rev-list --objects --all | awk '{print $2}' | sort -u \
 
 echo
 echo "=== high-risk value patterns across ALL history ==="
-# Build a searchable corpus of every blob ever committed, labelled by path.
-FOUND=0
+# Collect the matching PATHS (not values) so the exit status can distinguish a
+# real finding from the triaged lockfile-hash noise.
+FOUND_PATHS=""
 scan() {
   local label="$1" pattern="$2"
   local hits
@@ -31,19 +38,25 @@ scan() {
   if [ -n "$hits" ]; then
     echo "  [$label] FOUND in:"
     echo "$hits" | sed 's/^/      /'
-    FOUND=1
+    FOUND_PATHS="$FOUND_PATHS
+$hits"
   else
     echo "  [$label] clean"
   fi
 }
 
+# Brace quantifiers are written with SINGLE braces. Verified by planting a
+# real-looking key in history and confirming this catches it: a doubled
+# {{35}} reaches git grep literally, matches nothing, and the script reports
+# "clean" -- a false negative in a security tool, which is worse than no
+# tool. If you edit a pattern here, plant a match and check that it fires.
 scan "Google/Gemini API key"   'AIza[0-9A-Za-z_-]{35}'
 scan "AWS access key id"        'AKIA[0-9A-Z]{16}'
 scan "GitHub token"             'gh[pousr]_[0-9A-Za-z]{36}'
 scan "Slack token"              'xox[abprs]-[0-9A-Za-z-]{10,}'
 scan "Private key block"        'BEGIN (RSA |EC |OPENSSH |PGP )?PRIVATE KEY'
 scan "ngrok authtoken"          '(2|3)[0-9A-Za-z_-]{46}'
-scan "OpenCode service token"   '"token"[[:space:]]*:[[:space:]]*"[A-Za-z0-9_-]{20,}'
+scan "OpenCode service token"   '"token"[[:space:]]*:[[:space:]]*"[A-Za-z0-9_-]{20,}"'
 scan "Generic long bearer"      '[Bb]earer[[:space:]]+[A-Za-z0-9_-]{30,}'
 
 echo
@@ -57,8 +70,19 @@ git grep -I -l -F '[REDACTED]' $(git rev-list --all) -- 2>/dev/null \
   | sed 's/^[0-9a-f]*://' | sort -u | sed 's/^/      /' || echo "  none"
 
 echo
-if [ "$FOUND" = "0" ]; then
-  echo "RESULT: no high-risk credential patterns found in any commit."
-else
-  echo "RESULT: review the paths above before publishing."
+# The ngrok shape and the 64-hex shape both match lockfile integrity hashes,
+# which are base64/hex by construction. Triaged: zero lines in any lockfile
+# mention ngrok, no @ngrok package is a dependency, and the 64-hex match is
+# skills-lock.json's computedHash. These two are reported as known-benign so
+# CI stays meaningful -- any OTHER hit is a real finding and fails the run.
+real_hits=$(printf '%s\n' "$FOUND_PATHS" | grep -vE '(^|/)(package-lock|skills-lock)\.json$' || true)
+if [ -z "$real_hits" ]; then
+  echo "RESULT: no credential found in any commit."
+  echo "        (lockfile integrity-hash matches are known-benign and excluded)"
+  exit 0
 fi
+
+echo "RESULT: POSSIBLE CREDENTIAL FOUND. Do not publish until triaged:"
+echo "$real_hits" | sed 's/^/        /'
+echo "        Run scripts/scan-triage.sh to inspect without printing values."
+exit 1

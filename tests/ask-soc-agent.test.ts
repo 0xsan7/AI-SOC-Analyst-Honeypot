@@ -19,12 +19,15 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createMockModel } from "@mastra/core/test-utils/llm-mock";
 
-// A per-test directory. One module-level dir would be deleted by the first
-// afterEach and every later test would fail to open the database.
-let work: string;
-let dbFile: string;
+// src/mastra/store.ts reads TURSO_DATABASE_URL into a module-level constant at
+// IMPORT time. Setting it in beforeEach is too late -- the store would keep
+// pointing at whatever the real working tree uses, which is why these tests
+// passed locally (a soc-analyst.db already existed with the tables) and failed
+// on a fresh clone with "no such table: campaigns". Point it at a throwaway
+// file BEFORE the import below.
+const preWork = mkdtempSync(join(tmpdir(), "ask-mock-"));
+process.env.TURSO_DATABASE_URL = `file:${join(preWork, "ask.db")}`;
 
-// Imported after the env var is set so the store and agent share this file.
 const { Agent } = await import("@mastra/core/agent");
 const { Memory } = await import("@mastra/memory");
 const { LibSQLStore } = await import("@mastra/libsql");
@@ -44,7 +47,10 @@ function buildAgent(mockText: string) {
     memory: new Memory({
       // Same per-test file the store uses, so the agent and the campaign data
       // really do share a database rather than two unrelated ones.
-      storage: new LibSQLStore({ id: "ask-mock-memory", url: `file:${dbFile}` }),
+      storage: new LibSQLStore({
+        id: "ask-mock-memory",
+        url: process.env.TURSO_DATABASE_URL,
+      }),
       options: { generateTitle: true },
     }),
     tools: { listCampaignsTool, getCampaignDetailTool },
@@ -64,15 +70,14 @@ const baseEvent = {
   reasoning: "default credentials",
 };
 
+// initStore() creates the tables, so every test gets a schema. The path must
+// match the one fixed above, because the store captured it at import time.
 beforeEach(async () => {
-  work = mkdtempSync(join(tmpdir(), "ask-mock-"));
-  dbFile = join(work, "ask.db");
-  process.env.TURSO_DATABASE_URL = `file:${dbFile}`;
+  await initStore();
 });
 
 afterEach(async () => {
   closeStore();
-  rmSync(work, { recursive: true, force: true });
 });
 
 describe("ask_soc_agent with a mocked model (FR7)", () => {

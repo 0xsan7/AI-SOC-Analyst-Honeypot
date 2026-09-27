@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/0xsan7/Honeypot/blob/main/SECURITY.md
+    about: Report privately. Do not open a public issue for a security finding.
+  - name: Deployment question
+    url: https://github.com/0xsan7/Honeypot/blob/main/DEPLOY.md
+    about: Read this first; it covers VPS setup, firewall rules, and systemd units.

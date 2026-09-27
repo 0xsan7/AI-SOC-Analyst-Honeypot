@@ -214,6 +214,36 @@ error downstream. Only asserting on the schema itself caught it. This is the
 same class of bug as the ones in D17/D18: the test was checking a weaker
 property than the one claimed.
 
+## D21 — The secret scanner was reporting false "clean" (found while adding CI)
+
+Adding the CI workflow meant running the secret scan in a repo I had planted a
+fake key in, to prove it actually detects one. It reported "clean" for the
+Gemini, AWS, GitHub, Slack and bearer patterns.
+
+Two bugs, both producing the same false negative:
+
+1. `cd /Users/santiagojerald/soc-analyst` was hardcoded, so a copy of the
+   script run anywhere else silently scanned the ORIGINAL repo. Now uses
+   `$(dirname "${BASH_SOURCE[0]}")/..`.
+2. The brace quantifiers were written `{{35}}`. Bash does not reduce those —
+   `git grep` receives the doubled braces literally, matches nothing, and the
+   script reports "clean". Single braces are correct.
+
+What made this hard to see: while debugging, my own test harness was faking a
+pass. Python f-strings doubled the braces before the shell ever saw them, so
+`git grep '...{35}'` typed inside an f-string behaved differently from the
+literal file contents. Three "verified" runs were all measuring my test, not
+the script.
+
+The exit status is now meaningful: lockfile integrity-hash matches are excluded
+as triaged noise, and anything else exits 1 so CI goes red. Verified both ways
+— planted Gemini/AWS/GitHub/Slack/bearer/OpenCode-shaped values give exit 1 and
+name the file; the real repository gives exit 0.
+
+Same lesson as D17 and D18, one level down: the guard existed, ran, and
+reported success, and was still not testing anything. Break the thing you are
+guarding and watch the guard fail. If it does not fail, the guard is the bug.
+
 ## D20 — Mocked guards for the two live-API tests
 
 `test:ask` and `test:studio` need a Gemini key and a running Studio, so a

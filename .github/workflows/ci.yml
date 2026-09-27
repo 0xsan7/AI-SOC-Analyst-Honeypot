@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref. A force-push or a new commit should
+# not leave three stale CI runs competing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck and test
+    runs-on: ubuntu-latest
+    # Bounded so a hung process cannot occupy a runner forever.
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # .env.example is copied to .env so anything that merely reads a
+      # variable does not crash. The values are placeholders, so every test
+      # that touches the model takes its mocked path and costs nothing. The
+      # live Gemini key is never present in CI.
+      - name: Provide placeholder env
+        run: cp .env.example .env
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      # Full chain: typecheck, unit tests, and the five process-boundary
+      # suites (MCP handshake, MCP robustness, pipeline failure, campaign
+      # auto-close, HTTP honeypot). None require an API key.
+      - name: Full suite
+        run: npm run test:all
+
+      - name: Secret scan
+        run: bash scripts/scan-secrets.sh
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Install root
+        run: npm ci
+
+      - name: Install web
+        run: npm ci
+        working-directory: web
+
+      # The landing page is a separate build; a broken frontend must fail CI
+      # even though nothing in the test suite imports it.
+      - name: Build landing page
+        run: npm run build
+        working-directory: web
