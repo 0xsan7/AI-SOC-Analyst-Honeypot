@@ -6,11 +6,23 @@
  */
 import "dotenv/config";
 import { readFileSync } from "node:fs";
-import { correlate, initStore, listCampaigns } from "../src/mastra/store";
+import {
+  closeIdleCampaigns,
+  correlate,
+  initStore,
+  listCampaigns,
+} from "../src/mastra/store";
 import { generateReportIfNeeded } from "../src/mastra/report";
 import { EnrichedEventSchema } from "../src/mastra/schemas";
 
 await initStore();
+
+// Retire campaigns that have gone quiet before correlating, so an incident
+// that ended days ago stops counting as active.
+const closed = await closeIdleCampaigns();
+if (closed.length > 0) {
+  console.log(`Closed ${closed.length} idle campaign(s).`);
+}
 
 let events: ReturnType<typeof EnrichedEventSchema.parse>[] = [];
 try {
@@ -40,4 +52,7 @@ for (const e of events) {
   );
 }
 
-console.log(`\n${(await listCampaigns()).length} campaign(s) stored.`);
+console.log(
+  `\n${(await listCampaigns()).length} campaign(s) stored ` +
+    `(${(await listCampaigns(200)).filter((c) => c.status === "open").length} open).`,
+);

@@ -19,6 +19,21 @@ export const CORRELATION_WINDOW_MS = Number(
 export const REPORT_SEVERITY = 4;
 export const REPORT_EVENT_COUNT = 5;
 
+/**
+ * A campaign with no new events for this long is considered finished.
+ *
+ * 24h: long enough that a slow, periodic scanner keeps one campaign open across
+ * its daily passes, and short enough that a resolved incident stops showing as
+ * active within a day. Correlating against a closed campaign is not possible —
+ * `findMatchingCampaign` only matches `status = 'open'` — so if a source really
+ * is still active, the next event opens a fresh campaign rather than silently
+ * reviving a closed one. That keeps history honest at the cost of splitting a
+ * very long multi-day intrusion into successive campaigns.
+ */
+export const CAMPAIGN_IDLE_CLOSE_MS = Number(
+  process.env.CAMPAIGN_IDLE_CLOSE_MS ?? 24 * 60 * 60 * 1000,
+);
+
 let client: Client | null = null;
 
 export function db(): Client {
@@ -155,6 +170,30 @@ export async function correlate(event: EnrichedEvent): Promise<Campaign> {
     args: [event.id, event.timestamp, campaign.id, JSON.stringify(event)],
   });
   return campaign;
+}
+
+/**
+ * Close campaigns that have gone quiet.
+ *
+ * Returns the ids it closed. `now` is injectable so the rule can be tested
+ * without waiting a day. Idempotent: already-closed campaigns are untouched.
+ */
+export async function closeIdleCampaigns(
+  now: Date = new Date(),
+  idleMs: number = CAMPAIGN_IDLE_CLOSE_MS,
+): Promise<string[]> {
+  const cutoff = new Date(now.getTime() - idleMs).toISOString();
+  const res = await db().execute({
+    sql: "SELECT id FROM campaigns WHERE status = ? AND lastSeen < ?",
+    args: ["open", cutoff],
+  });
+  const ids = res.rows.map((r) => String((r as Record<string, unknown>).id));
+  if (ids.length === 0) return [];
+  await db().execute({
+    sql: `UPDATE campaigns SET status = ? WHERE status = ? AND lastSeen < ?`,
+    args: ["closed", "open", cutoff],
+  });
+  return ids;
 }
 
 export async function listCampaigns(limit = 20): Promise<Campaign[]> {

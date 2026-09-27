@@ -217,6 +217,7 @@ Add it to any MCP client (e.g. `claude_desktop_config.json`):
 | `HONEYPOT_BIND` | no | Defaults to `127.0.0.1` (loopback) |
 | `HONEYPOT_LOG` | no | Defaults to `data/events.jsonl` |
 | `CAMPAIGN_WINDOW_MS` | no | Correlation window, defaults to 30 minutes |
+| `CAMPAIGN_IDLE_CLOSE_MS` | no | Auto-close an idle campaign after this long, defaults to 24 hours |
 | `REPORT_DIR` | no | Defaults to `reports/` |
 | `DASHBOARD_PORT` | no | Defaults to `4173` |
 | `TURSO_DATABASE_URL` | no | Remote LibSQL; defaults to `file:./soc-analyst.db` |
