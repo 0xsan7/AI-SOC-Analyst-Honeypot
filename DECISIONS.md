@@ -359,3 +359,77 @@ MCP adversarial check (`scripts/test-mcp-robustness.ts`, 11 assertions) found
 nothing else: SQL-ish ids are parameterized and return `found: false` rather
 than executing; wrong-typed, missing, and absurd `limit` values all produce
 clean tool errors; the server survives every case and still lists all 3 tools.
+
+## D22 — The README's "unfinished" list was audited, and one item was false
+
+A status audit of the README's own "Not yet done" list found the three named
+gaps behaved differently from how they were described.
+
+**Single-event campaigns: already true, the README was wrong.** The README
+claimed "the seed data does not produce them naturally". Running
+`npm run seed && npm run correlate` against an isolated database produces
+**14 single-event campaigns out of 15**. Only the headline attacker repeats an
+IP inside the 30-minute window, so every background event stands alone. The
+claim came from reading `tests/correlation.test.ts`, which covers a single-event
+campaign by calling `correlate()` directly — the unit test was correct and the
+inference from it was not.
+
+Added `tests/seed-data.test.ts`, which runs the actual seed script and the
+actual correlation loop. That is the first test here to exercise the seed path
+end to end rather than a reimplementation of it.
+
+Two things the new test forced:
+
+- Correlating must happen exactly once per file. The first draft called the
+  correlation loop inside each `it`, and the store persisted, so the second call
+  re-ingested every event: campaigns of 12 and 2 instead of 6 and 1. The test
+  failed for a reason that had nothing to do with what it claimed to check.
+- A `beforeAll` that throws marks every test *skipped*, and a skipped suite
+  reads as a pass in a coverage report. The seed failure is now captured and
+  asserted in a test, so a broken seed goes red instead of vanishing.
+
+Mutation-verified: seeding only one event turns three assertions red; a syntax
+error in the seed script turns all six red rather than skipping them.
+
+**AbuseIPDB: cannot be closed here, so it is now stated plainly.** A free tier
+exists (1,000 checks/day, no card) but requires registering an account, and the
+key is issued only from that account's API Settings page. That is the
+maintainer's action, not an automated step. The README now says the real path
+has never run against a live key, gives the exact steps to close it, and warns
+that reputation scores in captured output are unverified until then.
+
+**Demo recording: no video, and none faked.** Capturing the browser console
+needs a GUI screen recorder. Instead of a placeholder, `scripts/demo-transcript.sh`
+generates a real terminal transcript from an actual run, and the README gives
+the exact three commands plus the honest constraints for whoever records the
+video.
+
+That script's first version had a bug worth recording: nesting quotes inside a
+quoted argument to `script(1)` mangled the database URL into `URL_INVALID`, the
+shell continued, and the run then printed a **stale report file from a previous
+invocation**. The transcript looked plausible and was almost entirely false. It
+now runs the inner session from a file, checks the exit status, and greps the
+output for error markers before publishing. Mutation-verified: pointing the
+recorded command at a missing file exits non-zero and writes nothing.
+
+## D23 — Exact counts in documentation are a liability
+
+The README claimed "47 unit tests" in one place and "56" in another; the real
+number was 56 at the time. It also claimed "26 assertions" and "11 malformed
+calls" for suites that emit 27 and 12 PASS lines.
+
+Exact counts rot the moment a test is added, and a wrong one is worse than none
+because it reads as a verified claim. Counts a reader can act on ("62 unit
+tests across 8 files") are kept and corrected. Counts that merely restate a
+suite's internals are replaced with what the suite proves.
+
+## D24 — Render the markdown, do not read it
+
+The orphaned `npm run test:concurrency` row was invisible on inspection: it still
+*looked* like a table row. A first-pass source-level detector flagged 17
+candidates, of which 16 were false positives — legitimate table headers and
+ASCII-art diagrams inside code fences. Rendering the README to HTML and
+inspecting the output found exactly one real defect, in the `<p>` element where
+the table had already closed.
+
+Every README rendering claim in this project is made against rendered HTML.

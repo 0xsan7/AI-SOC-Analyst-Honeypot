@@ -172,14 +172,16 @@ The site serves two views: a React landing page at `/` and the SOC console at
 | `npm run keys` | Regenerate honeypot host keys |
 | `npm run dev` | Mastra Studio on `localhost:4111` |
 | `npm run probe` | Drive synthetic SSH sessions at the honeypot |
+| `bash scripts/demo-transcript.sh` | Regenerate the demo transcript below from a real run |
 | `npm test` | Unit tests, LLM mocked (no API calls) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run test:all` | Every suite below, in order |
 | `npm run test:mcp` | Real MCP client completes a handshake and calls tools |
-| `npm run test:mcp-robustness` | 11 malformed calls; the server must not crash |
+| `npm run test:mcp-robustness` | Malformed and hostile tool calls return clean errors; the server survives all of them |
 | `npm run test:pipeline` | Pipeline exits non-zero and explains why when it fails |
 | `npm run test:autoclose` | Campaign auto-close persists across processes |
-| `npm run test:http` | HTTP honeypot over a real socket (26 assertions) |
+| `npm run test:http` | HTTP honeypot over a real socket, including hostile input |
+| `npm run test:concurrency` | N simultaneous sessions, one event each |
 | `npm run verify:honeypot` | No-execution invariant, against a running honeypot |
 | `npm run test:ask` | `ask_soc_agent` over a real MCP connection, live model |
 | `npm run test:studio` | Live trace recorded by Mastra Studio |
@@ -187,7 +189,6 @@ The site serves two views: a React landing page at `/` and the SOC console at
 `npm test` also covers both of the above with a mocked model at no cost, so a
 regression in either fails the default suite. The live variants prove the
 wiring against the real model; the mocked ones keep the guarantee permanent.
-| `npm run test:concurrency` | N simultaneous sessions, one event each |
 
 ## MCP server
 
@@ -323,10 +324,10 @@ npm run test:all
 
 | Suite | What it proves |
 | --- | --- |
-| `npm test` | 47 unit tests, LLM mocked, no API calls |
+| `npm test` | 62 unit tests across 8 files, LLM mocked, no API calls |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run test:mcp` | A real MCP client completes a handshake, lists all three tools, and calls two against a seeded store |
-| `npm run test:mcp-robustness` | 11 malformed calls return clean errors; the server survives all of them |
+| `npm run test:mcp-robustness` | Malformed and hostile tool calls return clean errors; the server survives all of them |
 | `npm run test:pipeline` | With the API key removed, the pipeline exits non-zero, writes nothing, and prints a fix |
 | `npm run test:autoclose` | An idle campaign becomes `closed`, confirmed by a separate process reading the store |
 | `npm run test:http` | The HTTP honeypot serves decoys, records events, survives hostile input, and contains no execution primitive |
@@ -381,7 +382,7 @@ src/
     agents/soc-agent.ts    memory-backed analyst agent
     public/dashboard.html  SOC console (no build step)
 scripts/                   pipeline, correlation, seeding, and 8 test harnesses
-tests/                     56 unit tests across 7 files
+tests/                     62 unit tests across 8 files
 web/                       React + Vite landing page (separate build)
 examples/                  committed sample reports, synthetic data only
 ```
@@ -414,11 +415,67 @@ they sit outside `test:all`.
 Not yet done:
 
 - No demo recording of the console. `npm run test:studio` proves the trace
-  data exists; it is not a video.
-- Single-event campaigns are covered by tests, but the seed data does not
-  produce them naturally.
-- Reputation enrichment is wired and degrades correctly, but has only been
-  exercised without an AbuseIPDB key.
+  data exists; it is not a video. See [Recording a demo](#recording-a-demo).
+- Reputation enrichment is wired and degrades correctly, but the real path has
+  **never been run against a live AbuseIPDB key** — only the no-key degraded
+  path has been executed. Getting a key is free
+  ([Individual plan](https://www.abuseipdb.com/pricing), 1,000 checks/day, no
+  card) but it requires registering an account and issuing the key from the
+  account's API Settings page, which the maintainer must do. To close it:
+  copy the key into `.env` as `ABUSEIPDB_API_KEY` and run `npm run pipeline`.
+  Until then, treat reputation scores in any captured output as unverified.
+
+An earlier version of this file also claimed the seed data did not produce
+single-event campaigns. That was wrong: `npm run seed && npm run correlate`
+produces **14 single-event campaigns out of 15**, because only the headline
+attacker appears more than once inside the 30-minute window. Verified by
+running it against an isolated database, not inferred from the test suite.
+
+### Recording a demo
+
+There is no video, and none can be produced by the tooling in this repository:
+capturing the browser console needs a GUI screen recorder, which automation
+does not have. Rather than ship a placeholder that looks like a demo, here is
+the reproducible text transcript and the exact steps a human needs for the
+video.
+
+The transcript below is real output, captured by
+[`scripts/demo-transcript.sh`](scripts/demo-transcript.sh). Regenerate it with
+one command after any output change:
+
+```bash
+bash scripts/demo-transcript.sh
+```
+
+```
+$ npm run correlate
+  198.51.100.23 sev3 credential_stuffing      -> campaign e7e97d6c (1 events, max sev 3)  REPORT: reports/campaign-e7e97d6c-4492-4acf-b273-e30fe3fb3087.md
+  198.51.100.23 sev3 recon                    -> campaign e7e97d6c (2 events, max sev 3)  REPORT: reports/campaign-e7e97d6c-4492-4acf-b273-e30fe3fb3087.md
+  198.51.100.23 sev3 recon                    -> campaign e7e97d6c (3 events, max sev 3)  REPORT: reports/campaign-e7e97d6c-4492-4acf-b273-e30fe3fb3087.md
+  198.51.100.23 sev4 active_exploit_attempt   -> campaign e7e97d6c (4 events, max sev 4)  REPORT: reports/campaign-e7e97d6c-4492-4acf-b273-e30fe3fb3087.md
+  198.51.100.23 sev5 active_exploit_attempt   -> campaign e7e97d6c (5 events, max sev 5)  REPORT: reports/campaign-e7e97d6c-4492-4acf-b273-e30fe3fb3087.md
+  198.51.100.23 sev5 active_exploit_attempt   -> campaign e7e97d6c (6 events, max sev 5)  REPORT: reports/campaign-e7e97d6c-4492-4acf-b273-e30fe3fb3087.md
+
+15 campaign(s) stored (15 open).
+```
+
+Six SSH sessions from one IP collapse into a single campaign whose severity
+climbs from 3 to 5 as the attacker escalates, and the report is written
+deterministically. To see it with the console:
+
+```bash
+npm run seed        # 20 synthetic events, no LLM calls
+npm run correlate   # group into campaigns, write reports/
+npm run dashboard   # http://127.0.0.1:4173/dashboard
+```
+
+For a screen recording, capture those three commands plus the dashboard
+showing the campaign list and one expanded incident report. Roughly 60–90
+seconds. Two honest constraints on the result: the data is synthetic, so say
+so if the video is published, and the honeypots bind to `127.0.0.1` by
+default, so there is no real attacker traffic in it yet — that arrives only
+after public deployment, which is deliberately a separate decision.
+
 
 ## Contributing
 
