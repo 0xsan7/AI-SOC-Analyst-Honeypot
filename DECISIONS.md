@@ -433,3 +433,59 @@ inspecting the output found exactly one real defect, in the `<p>` element where
 the table had already closed.
 
 Every README rendering claim in this project is made against rendered HTML.
+
+## D25 — FR6's threshold was never applied; 15 reports were written for 4 campaigns
+
+Found while auditing the README's "unfinished" list, by an agent asked to check
+whether the seed produced single-event campaigns. It did not (see D22), but
+following the seed data through to disk turned up a separate, real defect.
+
+**Symptom.** `npm run seed && npm run correlate` wrote **15 reports for the 4
+campaigns that meet the PRD threshold**. Every severity-1 background ping
+produced its own `reports/campaign-*.md`.
+
+**Cause.** `scripts/correlate.ts` decided whether to refresh a report like this:
+
+```ts
+const c = await correlate(e);
+const already = (await listCampaigns(100)).some(
+  (x) => x.id === c.id && x.eventIds.includes(e.id),
+);
+const path = await generateReportIfNeeded(c, already);
+```
+
+`correlate()` has already appended `e.id` to the campaign's `eventIds` by the
+time it returns, so the predicate is **true on every iteration** — including a
+campaign's very first event. That `true` is passed as `force`, and
+`generateReportIfNeeded` returns early only when `!force && !needsReport(c)`.
+So the severity threshold was consulted on exactly zero events.
+
+FR6 is unambiguous: *"A report auto-generates the first time a campaign reaches
+severity >= 4 or >= 5 events."* The code did not implement it.
+
+**Fix.** Ask the question before mutating:
+
+```ts
+const existing = await findMatchingCampaign(e);
+const c = await correlate(e);
+const path = await generateReportIfNeeded(c, existing !== null);
+```
+
+`force` now means "this campaign already existed, so refresh its report as it
+grows", which is what the original comment claimed it meant. `findMatchingCampaign`
+was already exported from `store.ts` and simply not imported here.
+
+**Result.** 4 reports, matching the 4 qualifying campaigns. The 6-event
+headline campaign still refreshes each time it grows.
+
+**Coverage.** `tests/report-threshold.test.ts` runs the real seed and correlate
+scripts, reads `reports/` back off disk, and asserts both directions: every
+qualifying campaign has a report, and no below-threshold campaign has one.
+
+Mutation-verified: restoring the original ordering fails with
+"11 below-threshold campaign(s) got a report: expected 11 to be +0".
+
+Note this was invisible to `tests/report.test.ts`, which calls the pure
+`renderReport()` directly. A renderer test cannot see whether the caller
+decided to call it. The threshold is a *caller* policy, so it needed a test at
+the script boundary.

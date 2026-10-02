@@ -324,7 +324,7 @@ npm run test:all
 
 | Suite | What it proves |
 | --- | --- |
-| `npm test` | 62 unit tests across 8 files, LLM mocked, no API calls |
+| `npm test` | 66 unit tests across 9 files, LLM mocked, no API calls |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run test:mcp` | A real MCP client completes a handshake, lists all three tools, and calls two against a seeded store |
 | `npm run test:mcp-robustness` | Malformed and hostile tool calls return clean errors; the server survives all of them |
@@ -382,7 +382,7 @@ src/
     agents/soc-agent.ts    memory-backed analyst agent
     public/dashboard.html  SOC console (no build step)
 scripts/                   pipeline, correlation, seeding, and 8 test harnesses
-tests/                     62 unit tests across 8 files
+tests/                     66 unit tests across 9 files
 web/                       React + Vite landing page (separate build)
 examples/                  committed sample reports, synthetic data only
 ```
