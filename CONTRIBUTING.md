@@ -25,7 +25,7 @@ red. Report that check in the PR description.
 ## Setup
 
 ```bash
-git clone https://github.com/0xsan7/Honeypot.git
+git clone https://github.com/0xsan7/AI-SOC-Analyst-Honeypot.git
 cd Honeypot
 npm install
 cp .env.example .env      # placeholders are fine for everything except live triage

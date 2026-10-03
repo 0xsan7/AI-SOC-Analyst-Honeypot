@@ -4,13 +4,13 @@ An agentic honeypot triage pipeline. Attackers hit a low-interaction SSH or HTTP
 honeypot; a Mastra workflow grades every session, enriches it with threat
 intelligence, and writes analyst-readable incident reports.
 
-[![CI](https://github.com/0xsan7/Honeypot/actions/workflows/ci.yml/badge.svg)](https://github.com/0xsan7/Honeypot/actions/workflows/ci.yml)
+[![CI](https://github.com/0xsan7/AI-SOC-Analyst-Honeypot/actions/workflows/ci.yml/badge.svg)](https://github.com/0xsan7/AI-SOC-Analyst-Honeypot/actions/workflows/ci.yml)
 [![Gemini](https://img.shields.io/badge/LLM-Google%20Gemini-4285F4?style=flat-square&logo=googlegemini&logoColor=white)](https://ai.google.dev/gemini-api)
 [![Mastra](https://img.shields.io/badge/framework-Mastra-8A2BE2?style=flat-square)](https://mastra.ai)
 [![Node](https://img.shields.io/badge/node-22.13%2B-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/typescript-6.0-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-56%20unit%20%2B%205%20integration-4EA1B3?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-66%20unit%20%2B%205%20integration-4EA1B3?style=flat-square)](#testing)
 
 **Status:** feature-complete and verified. Not yet running on a public VPS — see
 [Status](#status).
@@ -85,7 +85,7 @@ This project automates the triage:
 Requires **Node 22.13+**.
 
 ```bash
-git clone https://github.com/0xsan7/Honeypot.git
+git clone https://github.com/0xsan7/AI-SOC-Analyst-Honeypot.git
 cd Honeypot
 npm install
 cp .env.example .env      # add your GOOGLE_GENERATIVE_AI_API_KEY

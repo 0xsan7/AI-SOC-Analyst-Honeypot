@@ -70,7 +70,7 @@ dpkg-reconfigure --priority=low unattended-upgrades
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
-git clone https://github.com/0xsan7/Honeypot.git
+git clone https://github.com/0xsan7/AI-SOC-Analyst-Honeypot.git
 cd Honeypot
 npm install
 npm run setup          # host keys + frontend build + demo data

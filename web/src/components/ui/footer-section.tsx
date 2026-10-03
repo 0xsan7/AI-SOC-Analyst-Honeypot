@@ -13,7 +13,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Shield, Github, ExternalLink, FileText, CircleDot, Cpu } from "lucide-react";
 
-const REPO = "https://github.com/0xsan7/Honeypot";
+const REPO = "https://github.com/0xsan7/AI-SOC-Analyst-Honeypot";
 const DOCS = `${REPO}/blob/main/README.md`;
 
 interface FooterLink {

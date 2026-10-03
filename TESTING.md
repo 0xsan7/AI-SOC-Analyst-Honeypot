@@ -302,7 +302,7 @@ Re-run and compare. Gemini quota cannot affect this.
 ## Fresh-clone check
 
 ```bash
-git clone https://github.com/0xsan7/Honeypot.git honeypot-test
+git clone https://github.com/0xsan7/AI-SOC-Analyst-Honeypot.git honeypot-test
 cd honeypot-test
 npm install
 cp .env.example .env

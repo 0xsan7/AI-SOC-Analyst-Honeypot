@@ -99,7 +99,7 @@ const Navigation = React.memo(() => {
           </div>
 
           <div className="hidden items-center gap-4 md:flex">
-            <Button variant="ghost" size="sm" href="https://github.com/0xsan7/Honeypot">
+            <Button variant="ghost" size="sm" href="https://github.com/0xsan7/AI-SOC-Analyst-Honeypot">
               <Github className="h-4 w-4" />
               Source
             </Button>
@@ -215,7 +215,7 @@ const Hero = React.memo(() => {
           variant="secondary"
           size="lg"
           className="rounded-lg"
-          href="https://github.com/0xsan7/Honeypot"
+          href="https://github.com/0xsan7/AI-SOC-Analyst-Honeypot"
         >
           Source
         </Button>
@@ -284,7 +284,7 @@ const Setup = React.memo(() => {
           and open the dashboard.
         </p>
         <pre className="overflow-x-auto rounded-lg border border-line bg-ink p-6 font-mono text-sm leading-relaxed text-muted">
-          <code>{`git clone https://github.com/0xsan7/Honeypot.git
+          <code>{`git clone https://github.com/0xsan7/AI-SOC-Analyst-Honeypot.git
 cd Honeypot
 npm install
 
