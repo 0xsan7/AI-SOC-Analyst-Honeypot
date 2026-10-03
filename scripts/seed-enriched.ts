@@ -8,6 +8,7 @@
  */
 import "dotenv/config";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { EnrichedEventSchema } from "../src/mastra/schemas";
 
@@ -106,12 +107,15 @@ const all = [
   ),
 ];
 
-mkdirSync("data", { recursive: true });
-writeFileSync(
-  "data/enriched.jsonl",
-  all.map((e) => JSON.stringify(e)).join("\n") + "\n",
-);
-console.log(`Seeded ${all.length} enriched events into data/enriched.jsonl (spanning 24h)`);
+// Output path is overridable so parallel test suites can each seed into their
+// own temp directory. Two suites writing the same repo-relative file raced on
+// it: one truncated the file while the other was reading it, producing a
+// stray "}" line and a JSON parse error that looked like a corrupt fixture.
+const OUT_PATH = process.env.SEED_OUT_PATH || "data/enriched.jsonl";
+
+mkdirSync(dirname(OUT_PATH), { recursive: true });
+writeFileSync(OUT_PATH, all.map((e) => JSON.stringify(e)).join("\n") + "\n");
+console.log(`Seeded ${all.length} enriched events into ${OUT_PATH} (spanning 24h)`);
 console.log("  198.51.100.23 x6  (all gaps <30min, max sev 5) -> 1 campaign + report");
 console.log("  same IP again 75m later                       -> a separate campaign");
 console.log("  14 background events across 4 other IPs");

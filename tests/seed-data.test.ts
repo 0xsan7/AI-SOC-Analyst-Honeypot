@@ -24,6 +24,7 @@ type SeededCampaign = {
 };
 
 let dir: string;
+let seedOutPath = "";
 let events: SeededEvent[] = [];
 let campaigns: SeededCampaign[] = [];
 /** Non-null when the seed script itself failed, asserted on in a test. */
@@ -44,7 +45,7 @@ async function correlateSeeded() {
   const { EnrichedEventSchema } = await import("../src/mastra/schemas");
   await initStore();
 
-  const parsed = readFileSync("data/enriched.jsonl", "utf8")
+  const parsed = readFileSync(seedOutPath, "utf8")
     .split("\n")
     .filter(Boolean)
     .map((l: string) => EnrichedEventSchema.parse(JSON.parse(l)));
@@ -75,11 +76,17 @@ beforeAll(async () => {
   // and a skipped suite reads as a pass in a coverage report. Recording the
   // failure and asserting on it in a test makes it red instead.
   try {
+    // Seed into THIS suite's own directory. The seed script writes a shared
+    // repo-relative path by default, and two suites doing that in parallel
+    // corrupted each other's file — one truncated it while the other was
+    // reading, producing a stray "}" line and a JSON parse error.
+    const outPath = join(dir, "enriched.jsonl");
     execFileSync("npx", ["tsx", "scripts/seed-enriched.ts"], {
       cwd: process.cwd(),
-      env: process.env,
+      env: { ...process.env, SEED_OUT_PATH: outPath },
       stdio: "pipe",
     });
+    seedOutPath = outPath;
     seedError = null;
   } catch (err) {
     seedError = String((err as { stderr?: Buffer }).stderr ?? err);

@@ -13,7 +13,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -21,6 +21,8 @@ type SeededEvent = { timestamp: string; severity: number };
 type SeededCampaign = { id: string; eventIds: string[]; maxSeverity: number };
 
 let dir: string;
+/** Working directory for the scripts; private to this suite. */
+let work = "";
 let campaigns: SeededCampaign[] = [];
 /** Campaign ids that got a report on disk, read back from reports/. */
 let reportedIds = new Set<string>();
@@ -30,22 +32,40 @@ beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), "scram-fr6-"));
   process.env.TURSO_DATABASE_URL = `file:${join(dir, "fr6.db")}`;
 
-  // reports/ is gitignored, so clear it and read it back afterwards. The
-  // assertion is about files that actually appeared on disk, not about what
-  // the script claimed it did.
-  rmSync("reports", { recursive: true, force: true });
+  // Run both scripts with cwd = this suite's own temp directory, so the
+  // repo-relative `data/` and `reports/` they use are private to this file.
+  // Two suites sharing those paths corrupted each other: one truncated the
+  // seeded jsonl while the other read it, and each deleted the other's
+  // reports before asserting on them.
+  work = dir;
 
   try {
+    // correlate.ts reads data/enriched.jsonl relative to ITS OWN cwd, so the
+    // seed must land at work/data/enriched.jsonl -- not merely somewhere in
+    // the temp dir. Seeding to a path correlate never looks at produced zero
+    // campaigns and every threshold assertion below failed on an empty store.
+    const seedOut = join(work, "data", "enriched.jsonl");
+    mkdirSync(join(work, "data"), { recursive: true });
     execFileSync("npx", ["tsx", "scripts/seed-enriched.ts"], {
       cwd: process.cwd(),
-      env: process.env,
+      env: { ...process.env, SEED_OUT_PATH: seedOut },
       stdio: "pipe",
     });
-    execFileSync("npx", ["tsx", "scripts/correlate.ts"], {
-      cwd: process.cwd(),
-      env: process.env,
-      stdio: "pipe",
-    });
+    // cwd must stay the repo so `npx` can resolve tsx and the script's own
+    // relative imports; running with cwd = temp dir fails with an ESM resolve
+    // error before correlate.ts ever starts. So correlate is invoked through
+    // a shell that switches directory first, keeping module resolution rooted
+    // at the repo while the script's file I/O happens in the private work dir.
+    const repo = process.cwd();
+    execFileSync(
+      "bash",
+      ["-c", `cd "${work}" && npx tsx "${repo}/scripts/correlate.ts"`],
+      {
+        cwd: repo,
+        env: { ...process.env, SEED_OUT_PATH: seedOut },
+        stdio: "pipe",
+      },
+    );
   } catch (err) {
     seedError = String((err as { stderr?: Buffer }).stderr ?? err);
     return;
@@ -53,7 +73,7 @@ beforeAll(async () => {
 
   const { readdirSync } = await import("node:fs");
   try {
-    for (const f of readdirSync("reports")) {
+    for (const f of readdirSync(join(work, "reports"))) {
       const m = /campaign-([0-9a-f-]{36})/.exec(f);
       if (m) reportedIds.add(m[1]);
     }
