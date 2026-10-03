@@ -1,8 +1,14 @@
 # AI SOC Analyst
 
-An agentic honeypot triage pipeline. Attackers hit a low-interaction SSH or HTTP
-honeypot; a Mastra workflow grades every session, enriches it with threat
-intelligence, and writes analyst-readable incident reports.
+**Every session an LLM grades, every repeat attacker grouped into a campaign,
+and every campaign answerable in plain English over MCP.** Most honeypots record
+what an attacker typed and leave the judgement to you; this one does the
+triage, the correlation, and the reporting, and then exposes the result to an
+analyst agent instead of only to a human reading a console.
+
+Attackers hit a low-interaction SSH or HTTP honeypot; a Mastra workflow grades
+every session, enriches it with threat intelligence, and writes analyst-readable
+incident reports.
 
 [![CI](https://github.com/0xsan7/AI-SOC-Analyst-Honeypot/actions/workflows/ci.yml/badge.svg)](https://github.com/0xsan7/AI-SOC-Analyst-Honeypot/actions/workflows/ci.yml)
 [![Gemini](https://img.shields.io/badge/LLM-Google%20Gemini-4285F4?style=flat-square&logo=googlegemini&logoColor=white)](https://ai.google.dev/gemini-api)
@@ -36,48 +42,73 @@ This project automates the triage:
 | MCP server | Exposes `get_recent_campaigns`, `get_campaign_detail`, and `ask_soc_agent` to any MCP client. |
 | Dashboard | Live view of event volume, severity distribution, top sources, and campaign state. |
 
+## How this compares
+
+There are better honeypots. Being clear about that is more useful than
+pretending otherwise.
+
+**What the established tools do better**
+
+| Tool | Where it wins |
+| --- | --- |
+| [Cowrie](https://github.com/cowrie/cowrie) | Years of production use, a full emulated Debian filesystem, working commands, and malware sample collection. Medium- and high-interaction modes let an attacker go much further before you see them. |
+| [T-Pot](https://github.com/telekom-security/tpotce) | Twenty-plus honeypots in one deployment, including ICS/SCADA and container escapes, with the Elastic Stack and live attack maps already wired up. |
+| [Dionaea](https://github.com/DinoTools/dionaea) | Protocol breadth: it answers real vulnerable services, so exploit payloads reach the honeypot instead of being filtered upstream. |
+| [HonSSH](https://github.com/tnich/honssh) | Not a competitor. Archived in January 2023 and unmaintained, listed only because searches for SSH honeypots still surface it. |
+
+In raw collection this project is the weakest of the three active options. It
+covers two protocols, records typed commands rather than emulating a shell, and
+has never run against live internet traffic. It is built for the step that comes
+*after* collection.
+
+**What it does differently**
+
+- **LLM-graded severity.** Every session gets a classification and a 1-5 score
+  with reasoning, not just a log line. `npm run seed` shows the whole path with
+  no API key.
+- **Campaign correlation.** Events from one IP inside a 30-minute window become
+  a single incident that escalates in severity and closes after 24 hours idle.
+  Cowrie and T-Pot log individual sessions; the grouping is left to you or to
+  Elastic aggregations.
+- **Deterministic reports.** A campaign crosses a threshold and a Markdown
+  incident report is written, with no LLM in that step. Reports keep working
+  when the Gemini quota runs out.
+- **MCP exposure.** Three tools, including `ask_soc_agent`, so an analyst agent
+  can query campaigns in plain English over stdio. This is the part none of the
+  others do.
+- **Structural no-execution.** No `child_process`, `spawn`, `eval`, or shell
+  anywhere in the honeypot path — asserted by a test that scans the source and
+  by a behavioural check against a live listener.
+
+If you want broad protocol coverage and a decade of collected attacker
+sessions, use T-Pot or Cowrie. If you want graded triage and a finished
+incident from a handful of sessions, this is the tool for that. The honest
+position is that they are complementary, not substitutes.
+
 ## Architecture
 
-```
-   attacker
-      |  ssh -p 2222  /  http :8080
-      v
-+----------------------------+
-|  Honeypots                 |   accepts any credential
-|  ssh2 + node:http          |   static canned replies only
-|  no exec, no shell         |   rotating event log
-+-------------+--------------+
-              |  data/events.jsonl
-              v
-+----------------------------+
-|  Normalizer                |   JSONL -> validated AttackEvent
-|  (zod)                     |   malformed lines skipped, never fatal
-+-------------+--------------+
-              |
-              v
-+----------------------------+
-|  Mastra triage workflow    |
-|                            |
-|  classify --> Gemini       |
-|      |        grades 1-5   |
-|      v                     |
-|  enrich  --> ip-api.com    |
-|             AbuseIPDB      |
-|             (graceful)     |
-+-------------+--------------+
-              |  data/enriched.jsonl
-              v
-+----------------------------+
-|  Correlation               |   same IP within 30 min -> one campaign
-|  LibSQL (persists)         |   auto-close after 24h idle
-|                            |   report at severity >= 4 or >= 5 events
-+-------------+--------------+
-              |
-              v
-      reports/*.md
-              |
-              +--> dashboard   (npm run dashboard)
-              +--> MCP server  (npm run mcp)
+```mermaid
+flowchart TD
+  subgraph EDGE ["inbound traffic"]
+    direction LR
+    A["attacker<br/><b>ssh -p 2222</b> · <b>http :8080</b>"]
+  end
+
+  EDGE --> B["<b>Honeypots</b><br/>ssh2 + node:http<br/>accepts any credential<br/>static replies, no exec"]
+  B -->|"data/events.jsonl"| C["<b>Normalizer</b> (zod)<br/>JSONL to validated AttackEvent<br/>malformed lines skipped"]
+  C --> D["<b>Mastra triage workflow</b><br/>classify: noise / recon /<br/>credential_stuffing / active_exploit_attempt<br/>LLM-graded severity 1-5"]
+  D --> E["<b>Enrich</b><br/>ip-api.com geo + ASN<br/>AbuseIPDB reputation (optional)"]
+  E -->|"data/enriched.jsonl"| F["<b>Correlation</b> (LibSQL)<br/>same IP within 30 min to one campaign<br/>auto-close after 24h idle"]
+  F -->|"report at severity >= 4 or >= 5 events"| G["<b>reports/*.md</b>"]
+  G --> H["<b>dashboard</b><br/>npm run dashboard"]
+  G --> I["<b>MCP server</b> (3 tools)<br/>npm run mcp"]
+
+  classDef term fill:#1a1a1a,stroke:#4a4a4a,color:#e8e8e8
+  classDef stage fill:#141414,stroke:#5a5a5a,color:#f0f0f0
+  classDef out fill:#1c1408,stroke:#8a6d2f,color:#f5e6c8
+
+  class A,E,G term
+  class B,C,D,F,H,I stage
 ```
 
 ## Quick start
